@@ -1,10 +1,10 @@
-
 #include "MotorControl.h"
 #include "PinDefinitions.h"
 #include "Config.h"
 #include "Defaults.h"
+#include "GlobalVariables.h"
 
-void moveStraight(int leftMotorSpeed, int rightMotorSpeed)
+void moveStraight(int leftMotorSpeed, int rightMotorSpeed, int baseMotorSpeed)
 {
     // Left motor front
     digitalWrite(LEFT_MOTOR_PIN_1, HIGH);
@@ -14,15 +14,14 @@ void moveStraight(int leftMotorSpeed, int rightMotorSpeed)
     digitalWrite(RIGHT_MOTOR_PIN_1, HIGH);
     digitalWrite(RIGHT_MOTOR_PIN_2, LOW);
 
-    leftMotorSpeed = constrain(leftMotorSpeed, 0, 255);
-    rightMotorSpeed = constrain(rightMotorSpeed, 0, 255);
+    leftMotorSpeed = constrain(leftMotorSpeed, 0, baseMotorSpeed);
+    rightMotorSpeed = constrain(rightMotorSpeed, 0, baseMotorSpeed);
 
     analogWrite(LEFT_MOTOR_PWM_PIN, leftMotorSpeed);
     analogWrite(RIGHT_MOTOR_PWM_PIN, rightMotorSpeed);
 }
 
-
-void turnCCW(int leftMotorSpeed, int rightMotorSpeed)
+void turnCCW(int leftMotorSpeed, int rightMotorSpeed, int baseMotorSpeed)
 {
     // Left motor back
     digitalWrite(LEFT_MOTOR_PIN_1, LOW);
@@ -37,14 +36,14 @@ void turnCCW(int leftMotorSpeed, int rightMotorSpeed)
     rightMotorSpeed = (rightMotorSpeed * (100 - TURN_SPEED_REDUCTION_PERCENT)) / 100;
 #endif
 
-    leftMotorSpeed = constrain(leftMotorSpeed, 0, 255);
-    rightMotorSpeed = constrain(rightMotorSpeed, 0, 255);
+    leftMotorSpeed = constrain(leftMotorSpeed, 0, baseMotorSpeed);
+    rightMotorSpeed = constrain(rightMotorSpeed, 0, baseMotorSpeed);
 
     analogWrite(LEFT_MOTOR_PWM_PIN, leftMotorSpeed);
     analogWrite(RIGHT_MOTOR_PWM_PIN, rightMotorSpeed);
 }
 
-void turnCW(int leftMotorSpeed, int rightMotorSpeed)
+void turnCW(int leftMotorSpeed, int rightMotorSpeed, int baseMotorSpeed)
 {
     // Left motor front
     digitalWrite(LEFT_MOTOR_PIN_1, HIGH);
@@ -59,8 +58,8 @@ void turnCW(int leftMotorSpeed, int rightMotorSpeed)
     rightMotorSpeed = (rightMotorSpeed * (100 - TURN_SPEED_REDUCTION_PERCENT)) / 100;
 #endif
 
-    leftMotorSpeed = constrain(leftMotorSpeed, 0, 255);
-    rightMotorSpeed = constrain(rightMotorSpeed, 0, 255);
+    leftMotorSpeed = constrain(leftMotorSpeed, 0, baseMotorSpeed);
+    rightMotorSpeed = constrain(rightMotorSpeed, 0, baseMotorSpeed);
 
     analogWrite(LEFT_MOTOR_PWM_PIN, leftMotorSpeed);
     analogWrite(RIGHT_MOTOR_PWM_PIN, rightMotorSpeed);

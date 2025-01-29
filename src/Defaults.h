@@ -8,14 +8,14 @@
 // The duration in milliseconds for which the short brake is applied.
 #define BRAKE_DURATION_MILLIS 100
 
-#define DEFAULT_LOOP_DELAY 1
+#define DEFAULT_LOOP_DELAY 20
 // #define DEFAULT_KP 0
 #define DEFAULT_KP 90
 // #define DEFAULT_KI 0
-#define DEFAULT_KI 85
+#define DEFAULT_KI 90
 // #define DEFAULT_KD 0
-#define DEFAULT_KD 90
-#define DEFAULT_MOTOR_SPEED 200
+#define DEFAULT_KD 85
+#define DEFAULT_MOTOR_SPEED 150
 
 #define WHITE_LINE_BLACK_TRACK 0
 #define BLACK_LINE_WHITE_TRACK 1
@@ -23,10 +23,10 @@
 // Percentage by which the base motor speed reduces
 // whenever the robot rotates clockwise / counter clockwise.
 // #define TURN_SPEED_REDUCTION_PERCENT 10
-#define TURN_SPEED_REDUCTION_PERCENT 50
+#define TURN_SPEED_REDUCTION_PERCENT 10
 
 // The duration in milliseconds for which the robot moves straight to
 // confirm the presence of a stop patch.
-#define STOP_CHECK_DELAY 150
+#define STOP_CHECK_DELAY 100
 
 #endif

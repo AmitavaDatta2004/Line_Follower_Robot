@@ -30,10 +30,6 @@
 #define MID_6_SENSORS_HIGH (s4 == 1 && s5 == 1 && s6 == 1 && s7 == 1 && s8 == 1 && s9 == 1)
 #define MID_6_SENSORS_LOW (s4 == 0 && s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0 && s9 == 0)
 
-#define MID_4_SENSORS_HIGH (s5 == 1 && s6 == 1 && s7 == 1 && s8 == 1)
-#define MID_4_SENSORS_LOW (s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0)
-
-
 // #########################################################################################################################
 ///////////////////////////////////////////////     VARIABLE DEFINITIONS     ///////////////////////////////////////////////
 // #########################################################################################################################
@@ -81,7 +77,6 @@ BluetoothSerial SerialBT;
  * 			the type different from the default value.
  * 			In this case, 2 out of 6 LEDs of the Neopixel array indicate red for inversion and the
  * 			rest are for indicating checkpoints.
- *
  */
 void indicateInversionOn()
 {
@@ -109,9 +104,9 @@ void indicateOn()
 {
 	digitalWrite(BUZZER, HIGH);
 	digitalWrite(BLUE_LED, HIGH);
-	leds[2] = CRGB(80, 0, 255);
 	leds[3] = CRGB(80, 0, 255);
 	leds[4] = CRGB(80, 0, 255);
+	leds[2] = CRGB(80, 0, 255);
 	leds[5] = CRGB(80, 0, 255);
 	FastLED.show();
 }
@@ -166,9 +161,6 @@ void readSensors()
 	if (s1 != s12)
 		error_dir = s1 - s12;
 
-
-	//Here is the code for checkpoint 
-	//Here we can aslo add MID_8_SENSORS_HIGH
 	if (MID_6_SENSORS_HIGH)
 		indicateOn();
 	else
@@ -192,7 +184,7 @@ void readSensors()
 	else if (sensorData == 0b0011111111111100)
 	{
 		// This is a stop
-		moveStraight(baseMotorSpeed, baseMotorSpeed);
+		moveStraight(  baseMotorSpeed,  baseMotorSpeed,  baseMotorSpeed);
 		delay(STOP_CHECK_DELAY);
 		uint16_t sensorDataAgain = getSensorReadings();
 		if (sensorDataAgain == 0b0011111111111100)
@@ -279,7 +271,7 @@ void controlMotors()
 		uint8_t sensorReadings = getSensorReadings();
 		while (isOutOfLine(sensorReadings))
 		{
-			turnCW(baseMotorSpeed - leftMotorOffset, baseMotorSpeed - rightMotorOffset);
+			turnCW(baseMotorSpeed - leftMotorOffset, baseMotorSpeed - rightMotorOffset, baseMotorSpeed);
 			sensorReadings = getSensorReadings();
 		}
 // #if BRAKING_ENABLED == 1
@@ -306,7 +298,7 @@ void controlMotors()
 		uint8_t sensorReadings = getSensorReadings();
 		while (isOutOfLine(sensorReadings))
 		{
-			turnCCW(baseMotorSpeed - leftMotorOffset, baseMotorSpeed - rightMotorOffset);
+			turnCCW(baseMotorSpeed - leftMotorOffset, baseMotorSpeed - rightMotorOffset, baseMotorSpeed);
 			sensorReadings = getSensorReadings();
 		}
 // #if BRAKING_ENABLED == 1
@@ -325,7 +317,7 @@ void controlMotors()
 		int leftMotorSpeed = baseMotorSpeed + PID_value - leftMotorOffset;
 		int rightMotorSpeed = baseMotorSpeed - PID_value - rightMotorOffset;
 
-		moveStraight(leftMotorSpeed, rightMotorSpeed);
+		moveStraight(leftMotorSpeed, rightMotorSpeed, baseMotorSpeed);
 
 		// Additional delay imposed to make the Derivative component's impact more significant.
 		// This variable can be tuned dynamically
@@ -358,7 +350,7 @@ void setup()
 
 #if USE_INBUILT_BLUETOOTH == 1
 	SerialBT.setPin("9637");
-	SerialBT.begin("HELIOS 1.0");
+	SerialBT.begin("Glider v1.0");
 #endif
 
 #endif
