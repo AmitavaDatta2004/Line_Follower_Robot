@@ -3,6 +3,23 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// ─────────────────────────────────────────────────────────────────────────────
+// USB Serial Monitor Logging (Arduino IDE Serial Monitor)
+// Set to 1 to enable logs via USB cable → Arduino IDE Serial Monitor at 115200.
+// Works completely independently of Bluetooth. Safe to use with BT at the same time.
+// ─────────────────────────────────────────────────────────────────────────────
+#define USB_SERIAL_LOGGING_ENABLED 1
+
+// ── Bluetooth credentials ─────────────────────────────────────────────────────
+#define BT_PIN   "9637"
+#define BT_NAME  "HELIOS v1.0"
+
+// ── ESP32 LEDC hardware PWM ───────────────────────────────────────────────────
+// Using LEDC instead of analogWrite() gives configurable frequency and is the
+// recommended approach for ESP32 (analogWrite is a compatibility shim only).
+#define PWM_FREQ_HZ    5000   // Motor PWM frequency in Hz
+#define PWM_RESOLUTION    8   // Bit depth (8-bit = duty cycle 0–255)
+
 // Enable logging over Serial / Bluetooth
 #define BLUETOOTH_LOGGING_ENABLED 1
 
