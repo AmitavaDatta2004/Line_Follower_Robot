@@ -8,35 +8,31 @@
 #include "Wire.h"
 #include "FastLED.h"
 
-// Include ArduinoJson.h only when bluetooth logging / tuning is enabled.
+// Include ArduinoJson only when bluetooth logging / tuning is enabled.
 #if BLUETOOTH_LOGGING_ENABLED == 1 || BLUETOOTH_TUNING_ENABLED == 1
 #include <ArduinoJson.h>
 
-#define TX_DOC_MAX_DATA_LEN 256
+// TX_DOC_MAX_DATA_LEN removed — logging now uses printf; txDoc was dead code.
 #define RX_DOC_MAX_DATA_LEN 192
 
-// Inlcude BluetoothSerial.h only when the config macro for using the inbuilt bluetooth is set to 1
 #if USE_INBUILT_BLUETOOTH == 1
 #include <BluetoothSerial.h>
-
 #endif
 #endif
 
-// Macro definitions for commonly occurring conditions.
-// These macro definitions make the code more readable.
-#define MID_8_SENSORS_HIGH (s3 == 1 && s4 == 1 && s5 == 1 && s6 == 1 && s7 == 1 && s8 == 1 && s9 == 1 && s10 == 1)
-#define MID_8_SENSORS_LOW (s3 == 0 && s4 == 0 && s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0 && s9 == 0 && s10 == 0)
+// ─────────────────────────────────────────────────────────────────────────────
+// Macro definitions for checkpoint / event detection
+// ─────────────────────────────────────────────────────────────────────────────
+// MID_8_SENSORS_* macros removed — they were defined but never used.
 
 #define MID_6_SENSORS_HIGH (s4 == 1 && s5 == 1 && s6 == 1 && s7 == 1 && s8 == 1 && s9 == 1)
-#define MID_6_SENSORS_LOW (s4 == 0 && s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0 && s9 == 0)
+#define MID_6_SENSORS_LOW  (s4 == 0 && s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0 && s9 == 0)
 
 // #########################################################################################################################
 ///////////////////////////////////////////////     VARIABLE DEFINITIONS     ///////////////////////////////////////////////
 // #########################################################################################################################
 
-#if BLUETOOTH_LOGGING_ENABLED == 1
-StaticJsonDocument<TX_DOC_MAX_DATA_LEN> txDoc;
-#endif
+// rxDoc used only when BT tuning is enabled (TX doc removed — was dead code).
 #if BLUETOOTH_TUNING_ENABLED == 1
 StaticJsonDocument<RX_DOC_MAX_DATA_LEN> rxDoc;
 #endif
@@ -45,16 +41,19 @@ int Kp = DEFAULT_KP;
 int Ki = DEFAULT_KI;
 int Kd = DEFAULT_KD;
 int baseMotorSpeed = DEFAULT_MOTOR_SPEED;
-int loopDelay = DEFAULT_LOOP_DELAY;
-int error = 0;
-int leftMotorOffset = 0;
-int rightMotorOffset = 0;
-int P = 0;
-int I = 0;
-int D = 0;
-int error_dir = 0;
+int loopDelay      = DEFAULT_LOOP_DELAY;
+int error          = 0;
+
+// Initialised from Defaults.h compile-time constants; can be tweaked at runtime.
+int leftMotorOffset  = LEFT_MOTOR_OFFSET;
+int rightMotorOffset = RIGHT_MOTOR_OFFSET;
+
+int P             = 0;
+int I             = 0;
+int D             = 0;
+int error_dir     = 0;
 int previousError = 0;
-int PID_value = 0;
+int PID_value     = 0;
 
 // Make sure to update this variable according to the type of track the LFR is about to run on.
 // When the macro for enabling inversion is set to 1, this variable updates itself automatically.
@@ -62,8 +61,6 @@ uint8_t trackType = BLACK_LINE_WHITE_TRACK;
 
 CRGB leds[NUM_LEDS];
 
-// Define the Inbuilt bluetooth object only when bluetooth tuning / logging config macro is set to 1
-// and the default bluetooth is to be used.
 #if ((BLUETOOTH_LOGGING_ENABLED == 1 || BLUETOOTH_TUNING_ENABLED == 1) && USE_INBUILT_BLUETOOTH == 1)
 BluetoothSerial SerialBT;
 #endif
@@ -73,10 +70,7 @@ BluetoothSerial SerialBT;
 // #########################################################################################################################
 
 /**
- * @brief 	This function is called when inversion is enabled and the trackType variable changes to
- * 			the type different from the default value.
- * 			In this case, 2 out of 6 LEDs of the Neopixel array indicate red for inversion and the
- * 			rest are for indicating checkpoints.
+ * @brief  Indicates inversion is active: LEDs 0-1 glow red.
  */
 void indicateInversionOn()
 {
@@ -86,7 +80,7 @@ void indicateInversionOn()
 }
 
 /**
- * @brief 	Clear all indications for inversion only.
+ * @brief  Clears the inversion indicator LEDs only.
  */
 void indicateInversionOff()
 {
@@ -96,24 +90,21 @@ void indicateInversionOff()
 }
 
 /**
- * @brief 	This function is called when an event occurs. In this case, the event is checkpoint detection
- * 			4 out of 6 LEDs of the neopixel array indicate a color diffrent from the color
- * 			used for indicating inversion.
+ * @brief  Indicates a checkpoint / event: buzzer + blue LED + LEDs 2-5 purple.
  */
 void indicateOn()
 {
 	digitalWrite(BUZZER, HIGH);
 	digitalWrite(BLUE_LED, HIGH);
+	leds[2] = CRGB(80, 0, 255);
 	leds[3] = CRGB(80, 0, 255);
 	leds[4] = CRGB(80, 0, 255);
-	leds[2] = CRGB(80, 0, 255);
 	leds[5] = CRGB(80, 0, 255);
 	FastLED.show();
 }
 
 /**
- * @brief	Clear all indications for event only
- *
+ * @brief  Clears the checkpoint indicator only.
  */
 void indicateOff()
 {
@@ -127,40 +118,45 @@ void indicateOff()
 }
 
 /**
- * @brief 	The first step of an LFR's algorithm.
- * 			This function does the following :
- * 				1. Updates the error variable,
- * 				2. Keep a track of; on which side of the sensor was the line was detected ( error_dir )
- *				3. Indicate On / Off for checkpoint & inversion
- *				4. based on the sensor readings check if the robot went out of the line or did it just come across a stop patch
- *			Logic for traversing through maze like intersections can be implemented in this function
+ * @brief  Step 1 — Read sensors, update error and error_dir.
+ *
+ *  - error_dir is now updated from the full-width PID error (more reliable than
+ *    edge sensors only). Edge sensors s1/s12 are kept as a secondary fallback.
+ *  - When all sensors are dark AND error_dir is still 0, previousError is used
+ *    as a last-resort direction hint so the bot always picks a recovery direction.
  */
 void readSensors()
 {
-
 	uint16_t sensorData = getSensorReadings();
-	error = getCalculatedError(0);
+	error = getCalculatedError(sensorData, 0);
 
-	// left most sensor value
-	int s1 = (sensorData & (1 << 13)) >> 13;
+	// Extract individual sensor bits (s1 = leftmost, s12 = rightmost).
+	int s1  = (sensorData & (1 << 13)) >> 13;
+	int s2  = (sensorData & (1 << 12)) >> 12;  // kept for future use
+	int s3  = (sensorData & (1 << 11)) >> 11;
+	int s4  = (sensorData & (1 << 10)) >> 10;
+	int s5  = (sensorData & (1 <<  9)) >>  9;
+	int s6  = (sensorData & (1 <<  8)) >>  8;
+	int s7  = (sensorData & (1 <<  7)) >>  7;
+	int s8  = (sensorData & (1 <<  6)) >>  6;
+	int s9  = (sensorData & (1 <<  5)) >>  5;
+	int s10 = (sensorData & (1 <<  4)) >>  4;
+	int s11 = (sensorData & (1 <<  3)) >>  3;  // kept for future use
+	int s12 = (sensorData & (1 <<  2)) >>  2;
 
-	int s2 = (sensorData & (1 << 12)) >> 12;
-	int s3 = (sensorData & (1 << 11)) >> 11;
-	int s4 = (sensorData & (1 << 10)) >> 10;
-	int s5 = (sensorData & (1 << 9)) >> 9;
-	int s6 = (sensorData & (1 << 8)) >> 8;
-	int s7 = (sensorData & (1 << 7)) >> 7;
-	int s8 = (sensorData & (1 << 6)) >> 6;
-	int s9 = (sensorData & (1 << 5)) >> 5;
-	int s10 = (sensorData & (1 << 4)) >> 4;
-	int s11 = (sensorData & (1 << 3)) >> 3;
+	// Suppress unused-variable warnings (s2, s3, s11 reserved for user extension).
+	(void)s2; (void)s3; (void)s11;
 
-	// right most sensor value
-	int s12 = (sensorData & (1 << 2)) >> 2;
-
-	if (s1 != s12)
+	// ── Update direction memory ───────────────────────────────────────────────
+	// Primary: use the full-width PID error — more informative than edge sensors.
+	//   error > 0  →  line is to the right  →  error_dir = -1  →  recover CW
+	//   error < 0  →  line is to the left   →  error_dir = +1  →  recover CCW
+	if (sensorData != 0 && error != 0)
+		error_dir = (error > 0) ? -1 : 1;
+	else if (s1 != s12)   // Secondary fallback: raw edge sensors
 		error_dir = s1 - s12;
 
+	// ── Checkpoint / inversion indicators ────────────────────────────────────
 	if (MID_6_SENSORS_HIGH)
 		indicateOn();
 	else
@@ -171,64 +167,75 @@ void readSensors()
 	else
 		indicateInversionOff();
 
-	// When all the sensors indicate LFR is out of line
+	// ── Out-of-line: set recovery error ──────────────────────────────────────
 	if (sensorData == 0b0000000000000000)
 	{
-		// Moved out of the line
 		if (error_dir < 0)
 			error = OUT_OF_LINE_ERROR_VALUE;
 		else if (error_dir > 0)
 			error = -1 * OUT_OF_LINE_ERROR_VALUE;
+		else
+			// error_dir hasn't been set yet (start of run, or just after a gap reset).
+			// Use the sign of the last known PID error as a direction hint.
+			error = (previousError >= 0) ? OUT_OF_LINE_ERROR_VALUE
+			                             : -1 * OUT_OF_LINE_ERROR_VALUE;
 	}
-	// When all the sensors indicate LFR is above a patch.
+	// ── Stop patch: all 12 active sensors ────────────────────────────────────
 	else if (sensorData == 0b0011111111111100)
 	{
-		// This is a stop
-		moveStraight(  baseMotorSpeed,  baseMotorSpeed,  baseMotorSpeed);
+		// Drive forward briefly to confirm it's a real stop patch, not a glitch.
+		moveStraight(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
 		delay(STOP_CHECK_DELAY);
 		uint16_t sensorDataAgain = getSensorReadings();
 		if (sensorDataAgain == 0b0011111111111100)
 		{
 			indicateOff();
-			shortBrake(1000);
+			shortBrake(STOP_BRAKE_DURATION_MS);
 			stop();
-			delay(10000);
+			delay(STOP_HALT_DURATION_MS);
 		}
 	}
 
+	// ── USB Serial logging ────────────────────────────────────────────────────
 #if BLUETOOTH_LOGGING_ENABLED == 1
 
 #if USE_SERIAL_BLUETOOTH == 1
-	char ss[16];
-	// char output[TX_DOC_MAX_DATA_LEN];
-
-	sprintf(ss, "" TWELVE_BIT_SENSOR_PATTERN, TO_TWELVE_BIT_SENSOR_PATTERN(sensorData));
-
-	// txDoc["di"] = String(ss);
-	// serializeJson(txDoc, output);
-	// Serial.println(output);
-	// txDoc.clear();
-
-	Serial.print(F("I|Readings : "));
-	Serial.print(String(ss));
-	Serial.print(F(" | Error : "));
-	Serial.print(error);
-	Serial.print(F(" | Inv : "));
-	Serial.println(isInverted == WHITE_LINE_BLACK_TRACK ? F("WHITE_LINE_BLACK_TRACK") : F("BLACK_LINE_WHITE_TRACK"));
+	{
+		char ss[16];
+		sprintf(ss, "" TWELVE_BIT_SENSOR_PATTERN, TO_TWELVE_BIT_SENSOR_PATTERN(sensorData));
+		Serial.print(F("I|Readings : "));
+		Serial.print(String(ss));
+		Serial.print(F(" | Error : "));
+		Serial.print(error);
+		Serial.print(F(" | Inv : "));
+		Serial.println(trackType == WHITE_LINE_BLACK_TRACK ? F("WHITE_LINE_BLACK_TRACK") : F("BLACK_LINE_WHITE_TRACK"));
+	}
 #endif
 
 #if USE_INBUILT_BLUETOOTH == 1
 	SerialBT.printf("I|Readings : " TWELVE_BIT_SENSOR_PATTERN "| Error : %d | Inv :  %s\n",
-					TO_TWELVE_BIT_SENSOR_PATTERN(sensorData),
-					error, trackType == WHITE_LINE_BLACK_TRACK ? "WHITE_LINE_BLACK_TRACK" : "BLACK_LINE_WHITE_TRACK");
+	                TO_TWELVE_BIT_SENSOR_PATTERN(sensorData),
+	                error, trackType == WHITE_LINE_BLACK_TRACK ? "WHITE_LINE_BLACK_TRACK" : "BLACK_LINE_WHITE_TRACK");
 #endif
 
+#endif
+
+#if USB_SERIAL_LOGGING_ENABLED == 1
+	{
+		char usbBuf[48];
+		sprintf(usbBuf, "" TWELVE_BIT_SENSOR_PATTERN, TO_TWELVE_BIT_SENSOR_PATTERN(sensorData));
+		Serial.print(F("[SENSOR] "));
+		Serial.print(usbBuf);
+		Serial.print(F("  err="));
+		Serial.print(error);
+		Serial.print(F("  track="));
+		Serial.println(trackType == WHITE_LINE_BLACK_TRACK ? F("WHITE/BLACK") : F("BLACK/WHITE"));
+	}
 #endif
 }
 
 /**
- * @brief	Calculated the PID_Value based of the error calculated in the previous step.
- * 			The PID valus acts as a speed difference to be added between the left and right motors.
+ * @brief  Step 2 — Compute PID_value from the current error.
  */
 void calculatePID()
 {
@@ -239,51 +246,58 @@ void calculatePID()
 	else
 		I = I + error;
 
-	I = constrain(I, -200, 200);
+	I = constrain(I, -I_CLAMP, I_CLAMP);  // named constant replaces magic number
 
-	D = error - previousError;
+	D         = error - previousError;
 	PID_value = (Kp * P) + (Ki * I) + (Kd * D);
 	PID_value = constrain(PID_value, -255, 255);
 	previousError = error;
 }
 
 /**
- * @brief 	Calculates the individual speeds of left and right motor (between 0 - 255) after introducing
- * 			the PID_Value as an addition / subtraction for either of the left & right motor speeds
- * 			depending on the sign of the PID_Value.
- * 			Besides, this function also makes the robot turn clockwise / counter clockwise if a special
- * 			value is assigned to the error variable, as a routine to make the LFR get back to the line.
+ * @brief  Step 3 — Drive motors based on PID_value / recovery error.
+ *
+ *  Recovery loops now have a RECOVER_TIMEOUT_MS timeout so a hardware fault
+ *  cannot lock the bot into an infinite spin.
+ *  Motor offsets are applied inside the motor functions (MotorControl.cpp),
+ *  so they are NOT subtracted here.
  */
 void controlMotors()
 {
 	if (error == OUT_OF_LINE_ERROR_VALUE)
 	{
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.println(F("[RECOVERY] Out of line → Turning CW"));
+#endif
 #if BLUETOOTH_LOGGING_ENABLED == 1 && USE_SERIAL_BLUETOOTH == 1
 		Serial.println(F("E|Turning Clockwise  : "));
 #endif
 #if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
 		SerialBT.println(F("E|Turning Clockwise  : "));
 #endif
+
 #if BRAKING_ENABLED == 1
 		shortBrake(BRAKE_DURATION_MILLIS);
 #endif
-		// rotate clockwise until the sensors read a line somewhere in the center.
-		uint8_t sensorReadings = getSensorReadings();
-		while (isOutOfLine(sensorReadings))
+
+		uint16_t sensorReadings = getSensorReadings();
+		unsigned long recoveryStart = millis();
+		while (isOutOfLine(sensorReadings) &&
+		       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
 		{
-			turnCW(baseMotorSpeed - leftMotorOffset, baseMotorSpeed - rightMotorOffset, baseMotorSpeed);
+			turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
 			sensorReadings = getSensorReadings();
 		}
-// #if BRAKING_ENABLED == 1
-// 		shortBrake(BRAKE_DURATION_MILLIS);
-// #endif
+
 #if GAPS_ENABLED == 1
-		// Check line 300
 		error_dir = 0;
 #endif
 	}
 	else if (error == (-1 * OUT_OF_LINE_ERROR_VALUE))
 	{
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.println(F("[RECOVERY] Out of line → Turning CCW"));
+#endif
 #if BLUETOOTH_LOGGING_ENABLED == 1 && USE_SERIAL_BLUETOOTH == 1
 		Serial.println(F("E|Turning Counter Clockwise  : "));
 #endif
@@ -294,33 +308,30 @@ void controlMotors()
 #if BRAKING_ENABLED == 1
 		shortBrake(BRAKE_DURATION_MILLIS);
 #endif
-		// rotate clockwise until the sensors read a line somewhere in the center.
-		uint8_t sensorReadings = getSensorReadings();
-		while (isOutOfLine(sensorReadings))
+
+		uint16_t sensorReadings = getSensorReadings();
+		unsigned long recoveryStart = millis();
+		while (isOutOfLine(sensorReadings) &&
+		       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
 		{
-			turnCCW(baseMotorSpeed - leftMotorOffset, baseMotorSpeed - rightMotorOffset, baseMotorSpeed);
+			turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
 			sensorReadings = getSensorReadings();
 		}
-// #if BRAKING_ENABLED == 1
-// 		shortBrake(BRAKE_DURATION_MILLIS);
-// #endif
 
-// If gaps are enabled in this project, then the error_dir is set to 0 as soon as
-// the lfr get back to the line. This way a robot can traverse through line break
-// but may get out of dead ends.
 #if GAPS_ENABLED == 1
 		error_dir = 0;
 #endif
 	}
 	else
 	{
-		int leftMotorSpeed = baseMotorSpeed + PID_value - leftMotorOffset;
-		int rightMotorSpeed = baseMotorSpeed - PID_value - rightMotorOffset;
+		// Normal PID following.
+		// Motor offsets are applied inside moveStraight() — do NOT subtract here.
+		int leftMotorSpeed  = baseMotorSpeed + PID_value;
+		int rightMotorSpeed = baseMotorSpeed - PID_value;
 
 		moveStraight(leftMotorSpeed, rightMotorSpeed, baseMotorSpeed);
 
-		// Additional delay imposed to make the Derivative component's impact more significant.
-		// This variable can be tuned dynamically
+		// Extra delay when D != 0 makes the derivative term more impactful.
 		if (D != 0)
 			delay(loopDelay);
 	}
@@ -332,25 +343,35 @@ void controlMotors()
 
 void setup()
 {
-	pinMode(LEFT_MOTOR_PIN_1, OUTPUT);
-	pinMode(LEFT_MOTOR_PIN_2, OUTPUT);
-	pinMode(RIGHT_MOTOR_PIN_1, OUTPUT);
-	pinMode(RIGHT_MOTOR_PIN_2, OUTPUT);
-	pinMode(LEFT_MOTOR_PWM_PIN, OUTPUT);
-	pinMode(RIGHT_MOTOR_PWM_PIN, OUTPUT);
+	pinMode(LEFT_MOTOR_PIN_1,    OUTPUT);
+	pinMode(LEFT_MOTOR_PIN_2,    OUTPUT);
+	pinMode(RIGHT_MOTOR_PIN_1,   OUTPUT);
+	pinMode(RIGHT_MOTOR_PIN_2,   OUTPUT);
+
+	// initMotorPWM() replaces analogWrite() — configures LEDC hardware PWM.
+	initMotorPWM();
 
 	pinMode(BLUE_LED, OUTPUT);
-	pinMode(BUZZER, OUTPUT);
+	pinMode(BUZZER,   OUTPUT);
+
+#if USB_SERIAL_LOGGING_ENABLED == 1
+	Serial.begin(SERIAL_BAUD_RATE);
+	Serial.println(F("[BOOT] Line Follower Robot started."));
+	Serial.println(F("[BOOT] USB Serial logging active at 115200 baud."));
+#endif
 
 #if BLUETOOTH_LOGGING_ENABLED == 1 || BLUETOOTH_TUNING_ENABLED == 1
 
 #if USE_SERIAL_BLUETOOTH == 1
+	// Only start Serial here if USB logging hasn't already done it.
+#if USB_SERIAL_LOGGING_ENABLED == 0
 	Serial.begin(SERIAL_BAUD_RATE);
+#endif
 #endif
 
 #if USE_INBUILT_BLUETOOTH == 1
-	SerialBT.setPin("9637");
-	SerialBT.begin("Glider v1.0");
+	SerialBT.setPin(BT_PIN);    // defined in Config.h
+	SerialBT.begin(BT_NAME);   // defined in Config.h
 #endif
 
 #endif
@@ -367,8 +388,7 @@ void loop()
 
 #if BLUETOOTH_TUNING_ENABLED == 1
 
-	// Sample Message format
-	// {"P":36,"I":60,"D":38,"ms":100,"de":9}
+	// Sample message format: {"P":18,"I":0,"D":10,"ms":150,"de":20}
 
 #if USE_SERIAL_BLUETOOTH == 1
 	if (Serial.available())
@@ -379,24 +399,27 @@ void loop()
 		Serial.print(F("I|Data received : "));
 		Serial.println(data);
 
-		DeserializationError error = deserializeJson(rxDoc, data);
+		DeserializationError btError = deserializeJson(rxDoc, data);
 
-		if (error)
+		if (btError)
 		{
-			Serial.print(F("E|deseriaize json failed : "));
-			Serial.println(error.f_str());
-			return;
+			Serial.print(F("E|deserialize json failed : "));
+			Serial.println(btError.f_str());
 			rxDoc.clear();
+			return;
 		}
 
-		Kp = rxDoc["P"];			  // 0
-		Ki = rxDoc["I"];			  // 0
-		Kd = rxDoc["D"];			  // 0
-		baseMotorSpeed = rxDoc["ms"]; // 255
-		loopDelay = rxDoc["de"];	  // 100
+		// Validate and constrain all incoming values to safe ranges.
+		Kp            = constrain((int)rxDoc["P"],   0, 200);
+		Ki            = constrain((int)rxDoc["I"],   0, 200);
+		Kd            = constrain((int)rxDoc["D"],   0, 200);
+		baseMotorSpeed = constrain((int)rxDoc["ms"], 0, 255);
+		loopDelay     = constrain((int)rxDoc["de"],  0, 500);
 		rxDoc.clear();
+
 		char buff[64];
-		sprintf(buff, "W|P : %d | I : %d | D : %d | ms : %d | de : %d", P, I, D, baseMotorSpeed, loopDelay);
+		sprintf(buff, "W|Kp : %d | Ki : %d | Kd : %d | ms : %d | de : %d",
+		        Kp, Ki, Kd, baseMotorSpeed, loopDelay);
 		Serial.println(buff);
 	}
 #endif
@@ -404,39 +427,41 @@ void loop()
 #if USE_INBUILT_BLUETOOTH == 1
 	if (SerialBT.available())
 	{
-
 		SerialBT.flush();
 		String data = SerialBT.readStringUntil('\n');
 
 		SerialBT.printf("I|Data received : %s\n", data.c_str());
 
-		DeserializationError error = deserializeJson(rxDoc, data);
+		DeserializationError btError = deserializeJson(rxDoc, data);
 
-		if (error)
+		if (btError)
 		{
-			SerialBT.printf("E|deseriaize json failed : %s\n", error.f_str());
-			return;
+			SerialBT.printf("E|deserialize json failed : %s\n", btError.f_str());
 			rxDoc.clear();
+			return;
 		}
 
-		Kp = rxDoc["P"];			  // 0
-		Ki = rxDoc["I"];			  // 0
-		Kd = rxDoc["D"];			  // 0
-		baseMotorSpeed = rxDoc["ms"]; // 255
-		loopDelay = rxDoc["de"];	  // 100
+		// Validate and constrain all incoming values to safe ranges.
+		Kp            = constrain((int)rxDoc["P"],   0, 200);
+		Ki            = constrain((int)rxDoc["I"],   0, 200);
+		Kd            = constrain((int)rxDoc["D"],   0, 200);
+		baseMotorSpeed = constrain((int)rxDoc["ms"], 0, 255);
+		loopDelay     = constrain((int)rxDoc["de"],  0, 500);
 		rxDoc.clear();
 
-		SerialBT.printf("W|P : %d | I : %d | D : %d | ms : %d | de : %d\n", P, I, D, baseMotorSpeed, loopDelay);
+		SerialBT.printf("W|Kp : %d | Ki : %d | Kd : %d | ms : %d | de : %d\n",
+		                Kp, Ki, Kd, baseMotorSpeed, loopDelay);
 	}
 #endif
 
 #endif
-	// Step 1
+
+	// Step 1 — Read sensors, update error
 	readSensors();
 
-	// Step 2
+	// Step 2 — Compute PID
 	calculatePID();
 
-	// Step 3
+	// Step 3 — Drive motors
 	controlMotors();
 }

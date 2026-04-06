@@ -52,7 +52,7 @@
         (twoBytes & 0x0004 ? '1' : '0')
 
 uint16_t getSensorReadings();
-int getCalculatedError(int fallbackError);
+int getCalculatedError(uint16_t sensorReading, int fallbackError);
 int isOutOfLine(uint16_t sensorReadings);
 
 #endif

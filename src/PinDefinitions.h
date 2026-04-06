@@ -13,6 +13,10 @@
 #define DATA_PIN GPIO_NUM_17
 #define CLOCK_PIN GPIO_NUM_16
 
+// LEDC PWM channels (ESP32 hardware PWM — one channel per motor)
+#define LEFT_MOTOR_PWM_CHANNEL  0
+#define RIGHT_MOTOR_PWM_CHANNEL 1
+
 #define AIN2 GPIO_NUM_25
 #define AIN1 GPIO_NUM_26
 #define BIN2 GPIO_NUM_32
