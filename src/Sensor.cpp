@@ -75,7 +75,9 @@ uint16_t getSensorReadings()
         io_config.intr_type = GPIO_INTR_DISABLE;
         gpio_config(&io_config);
         delay(10);
-        gpio_set_level(CLOCK_ENABLE_PIN, 1);
+        // 74HC165 CLK INH is active LOW: LOW = clock enabled, HIGH = clock disabled.
+        // Keep LOW (enabled) as the idle state so shifts work correctly.
+        gpio_set_level(CLOCK_ENABLE_PIN, 0);
 
         sensorInitialized = true;
     }
@@ -87,10 +89,10 @@ uint16_t getSensorReadings()
     delayMicroseconds(50);
 
     // Get data from 74HC165
-    gpio_set_level(CLOCK_ENABLE_PIN, 0);
-    uint8_t leftHalfPinState = shiftIn165(DATA_PIN, CLOCK_PIN, LSBFIRST);
+    gpio_set_level(CLOCK_ENABLE_PIN, 0);   // Enable clock (CLK INH active LOW)
+    uint8_t leftHalfPinState  = shiftIn165(DATA_PIN, CLOCK_PIN, LSBFIRST);
     uint8_t rightHalfPinState = shiftIn165(DATA_PIN, CLOCK_PIN, LSBFIRST);
-    gpio_set_level(CLOCK_ENABLE_PIN, 1);
+    // Leave CLK INH LOW (idle-enabled) — do not disable after reading
 
     reading = getProcessedSensorData(leftHalfPinState, rightHalfPinState);
     reading &= 0b0011111111111100;

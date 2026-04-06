@@ -53,7 +53,7 @@
 
 // This config allows to reverse the default polarity of the motors
 // #define REVERSE_MOTOR_POLARITY 1
-#define REVERSE_MOTOR_POLARITY 0
+#define REVERSE_MOTOR_POLARITY 1
 
 // Allow the robot to reduce the speed by a certain percent when making a
 // clockwise / counter clockwise rotation. The percent value is defined in Defaults.h

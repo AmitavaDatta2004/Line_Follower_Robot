@@ -57,7 +57,9 @@ int PID_value     = 0;
 
 // Make sure to update this variable according to the type of track the LFR is about to run on.
 // When the macro for enabling inversion is set to 1, this variable updates itself automatically.
-uint8_t trackType = BLACK_LINE_WHITE_TRACK;
+// ⚠️  Set this to the ACTUAL track type you start on. If wrong, all sensor
+//      readings will be inverted and the bot will spin in recovery immediately.
+uint8_t trackType = WHITE_LINE_BLACK_TRACK;   // ← change to BLACK_LINE_WHITE_TRACK if needed
 
 CRGB leds[NUM_LEDS];
 
