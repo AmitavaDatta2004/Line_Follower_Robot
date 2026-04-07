@@ -53,6 +53,7 @@ int I             = 0;
 int D             = 0;
 int error_dir     = 0;
 int previousError = 0;
+int lastRealError  = 0;  // last error when sensors actively saw the line (≠ OUT_OF_LINE placeholder)
 int PID_value     = 0;
 
 // Make sure to update this variable according to the type of track the LFR is about to run on.
@@ -169,6 +170,12 @@ void readSensors()
 	else
 		indicateInversionOff();
 
+	// ── Save last real error before it may be overwritten by OUT_OF_LINE value ─
+	// lastRealError holds the most recent error captured while sensors saw the line.
+	// Checked in controlMotors() to tell a gap (lastRealError≈0) from a corner.
+	if (sensorData != 0)
+		lastRealError = error;
+
 	// ── Out-of-line: set recovery error ──────────────────────────────────────
 	if (sensorData == 0b0000000000000000)
 	{
@@ -284,6 +291,10 @@ void controlMotors()
 		// This prevents the 200ms brake + recovery spin firing at every dotted gap.
 		// ══════════════════════════════════════════════════════════════════════
 #if GAPS_ENABLED == 1
+		// Gate: only do Phase 1 if the bot was travelling STRAIGHT when sensors went dark.
+		// Gap   → lastRealError ≈ 0 (straight travel) → drive straight to cross it.
+		// Corner → lastRealError was building up (large) → skip straight to Phase 2.
+		if (abs(lastRealError) <= GAP_ERROR_THRESHOLD)
 		{
 			uint16_t      gapSensor = getSensorReadings();
 			unsigned long gapStart  = millis();
@@ -308,6 +319,13 @@ void controlMotors()
 			// Still dark → not a gap. Fall through to recovery spin.
 #if USB_SERIAL_LOGGING_ENABLED == 1
 			Serial.println(F("[GAP] Still dark → starting recovery spin"));
+#endif
+		}
+		else
+		{
+#if USB_SERIAL_LOGGING_ENABLED == 1
+			Serial.printf("[TURN] lastRealError=%d > threshold=%d → skipping gap test\n",
+			              lastRealError, GAP_ERROR_THRESHOLD);
 #endif
 		}
 #endif  // GAPS_ENABLED
