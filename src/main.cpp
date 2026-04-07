@@ -274,87 +274,63 @@ void calculatePID()
  */
 void controlMotors()
 {
-	if (error == OUT_OF_LINE_ERROR_VALUE || error == (-1 * OUT_OF_LINE_ERROR_VALUE))
+	if (error == OUT_OF_LINE_ERROR_VALUE)
 	{
-		// ══════════════════════════════════════════════════════════════════════
-		// PHASE 1 — Gap Test  (only runs when GAPS_ENABLED == 1)
-		// Drive straight at full base speed for GAP_TIMEOUT_MS.
-		// • Line returns within window  → it was a track gap.  No brake, no spin.
-		// • Still dark after window     → real line-loss (corner). Go to Phase 2.
-		// This prevents the 200ms brake + recovery spin firing at every dotted gap.
-		// ══════════════════════════════════════════════════════════════════════
-#if GAPS_ENABLED == 1
-		{
-			uint16_t      gapSensor = getSensorReadings();
-			unsigned long gapStart  = millis();
-
-			while (isOutOfLine(gapSensor) && (millis() - gapStart < GAP_TIMEOUT_MS))
-			{
-				// Drive straight at full speed — get over the gap fast.
-				moveStraight(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-				gapSensor = getSensorReadings();
-			}
-
-			if (!isOutOfLine(gapSensor))
-			{
-				// ✅ Line found again within the timeout → it was a gap.
-				error_dir = 0;   // reset so next out-of-line uses fresh sensor data
 #if USB_SERIAL_LOGGING_ENABLED == 1
-				Serial.println(F("[GAP] Crossed ✓ — resuming PID"));
+		Serial.println(F("[RECOVERY] Out of line → Turning CW"));
 #endif
-				return;   // exit controlMotors(); next loop() call handles PID
-			}
-
-			// Still dark → not a gap. Fall through to recovery spin.
-#if USB_SERIAL_LOGGING_ENABLED == 1
-			Serial.println(F("[GAP] Still dark → starting recovery spin"));
+#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_SERIAL_BLUETOOTH == 1
+		Serial.println(F("E|Turning Clockwise  : "));
 #endif
-		}
-#endif  // GAPS_ENABLED
+#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
+		SerialBT.println(F("E|Turning Clockwise  : "));
+#endif
 
-		// ══════════════════════════════════════════════════════════════════════
-		// PHASE 2 — Recovery Spin
-		// Real line-loss (corner, overshoot, or hardware fault).
-		// Brake first to shed momentum, then spin toward the last known line side.
-		// ══════════════════════════════════════════════════════════════════════
 #if BRAKING_ENABLED == 1
 		shortBrake(BRAKE_DURATION_MILLIS);
 #endif
 
-		if (error == OUT_OF_LINE_ERROR_VALUE)
+		uint16_t sensorReadings = getSensorReadings();
+		unsigned long recoveryStart = millis();
+		while (isOutOfLine(sensorReadings) &&
+		       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
 		{
+			turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+			sensorReadings = getSensorReadings();
+		}
+
+#if GAPS_ENABLED == 1
+		error_dir = 0;
+#endif
+	}
+	else if (error == (-1 * OUT_OF_LINE_ERROR_VALUE))
+	{
 #if USB_SERIAL_LOGGING_ENABLED == 1
-			Serial.println(F("[RECOVERY] Turning CW"));
+		Serial.println(F("[RECOVERY] Out of line → Turning CCW"));
+#endif
+#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_SERIAL_BLUETOOTH == 1
+		Serial.println(F("E|Turning Counter Clockwise  : "));
 #endif
 #if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
-			SerialBT.println(F("E|Turning Clockwise"));
+		SerialBT.println(F("E|Turning Counter Clockwise  : "));
 #endif
-			uint16_t      sensorReadings = getSensorReadings();
-			unsigned long recoveryStart  = millis();
-			while (isOutOfLine(sensorReadings) &&
-			       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
-			{
-				turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-				sensorReadings = getSensorReadings();
-			}
-		}
-		else
+
+#if BRAKING_ENABLED == 1
+		shortBrake(BRAKE_DURATION_MILLIS);
+#endif
+
+		uint16_t sensorReadings = getSensorReadings();
+		unsigned long recoveryStart = millis();
+		while (isOutOfLine(sensorReadings) &&
+		       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
 		{
-#if USB_SERIAL_LOGGING_ENABLED == 1
-			Serial.println(F("[RECOVERY] Turning CCW"));
-#endif
-#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
-			SerialBT.println(F("E|Turning Counter Clockwise"));
-#endif
-			uint16_t      sensorReadings = getSensorReadings();
-			unsigned long recoveryStart  = millis();
-			while (isOutOfLine(sensorReadings) &&
-			       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
-			{
-				turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-				sensorReadings = getSensorReadings();
-			}
+			turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+			sensorReadings = getSensorReadings();
 		}
+
+#if GAPS_ENABLED == 1
+		error_dir = 0;
+#endif
 	}
 	else
 	{
