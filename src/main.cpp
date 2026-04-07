@@ -248,10 +248,18 @@ void calculatePID()
 	else
 		I = I + error;
 
-	I = constrain(I, -I_CLAMP, I_CLAMP);  // named constant replaces magic number
+	I = constrain(I, -I_CLAMP, I_CLAMP);
 
-	D         = error - previousError;
-	PID_value = (Kp * P) + (Ki * I) + (Kd * D);
+	D = error - previousError;
+
+	// Clamp the derivative contribution BEFORE adding to PID.
+	// Prevents "derivative kick": at an obtuse turn apex the error sign reverses
+	// suddenly (e.g. -9 → +4), making D spike to +13 and Kd*D = 130 — which
+	// fires a massive correction in the WRONG direction.
+	// D_CLAMP caps this spike while leaving Kp and Ki completely unaffected.
+	int D_term = constrain(Kd * D, -D_CLAMP, D_CLAMP);
+
+	PID_value = (Kp * P) + (Ki * I) + D_term;
 	PID_value = constrain(PID_value, -255, 255);
 	previousError = error;
 }
@@ -326,10 +334,36 @@ void controlMotors()
 	}
 	else
 	{
-		// Normal PID following.
-		// Motor offsets are applied inside moveStraight() — do NOT subtract here.
-		int leftMotorSpeed  = baseMotorSpeed + PID_value;
-		int rightMotorSpeed = baseMotorSpeed - PID_value;
+		// ── Dynamic speed scaling ─────────────────────────────────────────────
+		// Reduces effective speed proportional to turn sharpness so the bot
+		// naturally slows before curves and accelerates on straight sections.
+		// Formula:  effectiveSpeed = baseMotorSpeed - (|error| × SPEED_SCALE_FACTOR)
+		// Individual motors can still exceed effectiveSpeed for differential
+		// correction — baseMotorSpeed is kept as the upper clamp in moveStraight().
+#if DYNAMIC_SPEED_ENABLED == 1
+		// Primary: slow down proportional to current error magnitude.
+		int effectiveSpeed = baseMotorSpeed - (abs(error) * SPEED_SCALE_FACTOR);
+		// Predictive: also slow down based on how fast the error is changing (D term).
+		// This brakes BEFORE the error peaks — critical for 60° triangle/arrow corners.
+		effectiveSpeed    -= (abs(D) * D_SPEED_FACTOR);
+		effectiveSpeed     = constrain(effectiveSpeed, MIN_MOTOR_SPEED, baseMotorSpeed);
+#else
+		int effectiveSpeed = baseMotorSpeed;
+#endif
+
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		// Throttle: only log every LOG_INTERVAL_LOOPS loops (~500ms) to avoid flooding.
+		static uint16_t logCounter = 0;
+		if (++logCounter >= LOG_INTERVAL_LOOPS)
+		{
+			logCounter = 0;
+			Serial.printf("[SPEED] eff=%d  base=%d  err=%d  D=%d\n",
+			              effectiveSpeed, baseMotorSpeed, error, D);
+		}
+#endif
+
+		int leftMotorSpeed  = effectiveSpeed + PID_value;
+		int rightMotorSpeed = effectiveSpeed - PID_value;
 
 		moveStraight(leftMotorSpeed, rightMotorSpeed, baseMotorSpeed);
 
