@@ -21,6 +21,8 @@ extern int I;
 extern int D;
 extern int error_dir;
 extern int previousError;
+extern int lastRealError;   // last error when sensors were ACTIVE (not out-of-line placeholder)
+                             // used to distinguish gap (≈0) from corner (large) in controlMotors()
 extern int PID_value;
 extern bool sensorInitialized;
 

@@ -22,6 +22,12 @@
 // Right-angle turns: bot drives ~8cm past corner at MIN speed before recovery starts.
 #define GAP_TIMEOUT_MS          150
 
+// Maximum |lastRealError| to qualify as a gap (vs. a corner).
+// Gap   → bot was going STRAIGHT → lastRealError ≈ 0  (≤ threshold) → Phase 1 runs.
+// Corner → error was BUILDING UP  → lastRealError large (> threshold) → skip to Phase 2.
+// Tune: higher = more turns treated as gaps (risky); lower = fewer gaps recognised.
+#define GAP_ERROR_THRESHOLD       3
+
 // ── Stop patch behaviour ───────────────────────────────────────────────────────
 // Time (ms) to drive forward to confirm the stop patch is real (not a false positive).
 #define STOP_CHECK_DELAY         100
