@@ -14,6 +14,14 @@
 // At 600 RPM / 200 PWM (~1.6 m/s), 200ms is needed to shed momentum before spinning.
 #define BRAKE_DURATION_MILLIS    200
 
+// ── Gap handling ──────────────────────────────────────────────────────────────
+// When sensors go dark, the bot first drives straight for GAP_TIMEOUT_MS before
+// deciding it's a real corner. If the line returns within this window → gap handled,
+// no braking, no recovery spin. If still dark → Phase 2 (brake + CW/CCW spin).
+// At 200 PWM (~1.6 m/s): 150ms × 1.6 = ~24cm gap coverage.
+// Right-angle turns: bot drives ~8cm past corner at MIN speed before recovery starts.
+#define GAP_TIMEOUT_MS          150
+
 // ── Stop patch behaviour ───────────────────────────────────────────────────────
 // Time (ms) to drive forward to confirm the stop patch is real (not a false positive).
 #define STOP_CHECK_DELAY         100
