@@ -151,13 +151,25 @@ void readSensors()
 	(void)s2; (void)s3; (void)s11;
 
 	// ── Update direction memory ───────────────────────────────────────────────
-	// Primary: use the full-width PID error — more informative than edge sensors.
-	//   error > 0  →  line is to the right  →  error_dir = -1  →  recover CW
-	//   error < 0  →  line is to the left   →  error_dir = +1  →  recover CCW
-	if (sensorData != 0 && error != 0)
+	// EXTREME EDGE PRIORITY:
+	// For acute angles (e.g. 60° zigzags), the new line hits the extreme outer sensors
+	// before the robot reaches the apex. We MUST prioritize these edge sensors to 
+	// set the correct turn direction because the PID average gets washed out (error ≈ 0)
+	// when both legs of the V are under the sensor bar near the apex.
+	bool edgeLeft  = (s1 || s2);
+	bool edgeRight = (s11 || s12);
+	static unsigned long lastEdgeTime = 0;
+
+	if (edgeLeft && !edgeRight) {
+		error_dir = 1;  // Priority: sharp CCW (Left)
+		lastEdgeTime = millis();
+	} else if (edgeRight && !edgeLeft) {
+		error_dir = -1; // Priority: sharp CW (Right)
+		lastEdgeTime = millis();
+	} else if (sensorData != 0 && error != 0) {
+		// Fallback: standard PID direction for continuous/gentle curves
 		error_dir = (error > 0) ? -1 : 1;
-	else if (s1 != s12)   // Secondary fallback: raw edge sensors
-		error_dir = s1 - s12;
+	}
 
 	// ── Checkpoint / inversion indicators ────────────────────────────────────
 	if (MID_6_SENSORS_HIGH)
@@ -174,7 +186,16 @@ void readSensors()
 	// lastRealError holds the most recent error captured while sensors saw the line.
 	// Checked in controlMotors() to tell a gap (lastRealError≈0) from a corner.
 	if (sensorData != 0)
-		lastRealError = error;
+	{
+		if (millis() - lastEdgeTime < 200) {
+			// If we recently saw an extreme edge, FORCE a large error to bypass the GAP logic.
+			// This prevents the bot from treating an acute apex (where error is briefly 0) 
+			// as a dashed line and overrunning it into empty space.
+			lastRealError = (error_dir < 0) ? 10 : -10;
+		} else {
+			lastRealError = error;
+		}
+	}
 
 	// ── Out-of-line: set recovery error ──────────────────────────────────────
 	if (sensorData == 0b0000000000000000)
