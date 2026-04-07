@@ -10,17 +10,6 @@
 // Triangle corners on HYPERDRIVE track require longer recovery window — 4 seconds.
 #define RECOVER_TIMEOUT_MS      4000
 
-// Time (ms) to try the PRIMARY recovery direction before switching to the opposite.
-// If the bot is at a 30° corner and error_dir pointed wrong, this limits how long
-// it spins the wrong way before automatically trying the correct direction.
-// Must be less than RECOVER_TIMEOUT_MS.
-#define RECOVER_FIRST_DIR_MS    1200
-
-// Time (ms) to drive STRAIGHT when sensors go dark (gap/dotted-line handling).
-// Drives forward to check if the line reappears ahead (gap) before starting a
-// recovery spin. Too low = misses gap. Too high = overshoots next dot.
-#define GAP_FORWARD_MS           120
-
 // Braking duration (ms) applied before each recovery spin (BRAKING_ENABLED = 1).
 // At 600 RPM / 200 PWM (~1.6 m/s), 200ms is needed to shed momentum before spinning.
 #define BRAKE_DURATION_MILLIS    200

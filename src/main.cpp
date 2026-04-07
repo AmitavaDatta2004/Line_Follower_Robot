@@ -274,89 +274,63 @@ void calculatePID()
  */
 void controlMotors()
 {
-	// ── Out-of-line recovery ──────────────────────────────────────────────────
-	if (error == OUT_OF_LINE_ERROR_VALUE || error == (-1 * OUT_OF_LINE_ERROR_VALUE))
+	if (error == OUT_OF_LINE_ERROR_VALUE)
 	{
-		// true = try CW first, false = try CCW first (based on error_dir).
-		const bool primaryIsCW = (error == OUT_OF_LINE_ERROR_VALUE);
-
-		// ── Stage 1: Gap bridge (GAPS_ENABLED only) ───────────────────────────
-		// For dotted-line / gap sections the line is AHEAD of the bot, not to
-		// the side. Drive straight forward for GAP_FORWARD_MS and re-check.
-		// If the line reappears → it was a gap; resume PID without spinning.
-		// If still no line → it is a true line loss; fall through to spin.
-#if GAPS_ENABLED == 1
-		moveStraight(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-		delay(GAP_FORWARD_MS);
-		uint16_t gapCheck = getSensorReadings();
-		if (!isOutOfLine(gapCheck))
-		{
-			// Gap crossed — line found ahead.
-			// Reset previousError so D doesn't spike when PID resumes.
-			previousError = 0;
-			error_dir     = 0;
 #if USB_SERIAL_LOGGING_ENABLED == 1
-			Serial.println(F("[GAP] Crossed gap — line found ahead, resuming PID."));
+		Serial.println(F("[RECOVERY] Out of line → Turning CW"));
 #endif
-			return;
-		}
-#if USB_SERIAL_LOGGING_ENABLED == 1
-		Serial.println(F("[GAP] No line ahead — treating as true line loss."));
+#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_SERIAL_BLUETOOTH == 1
+		Serial.println(F("E|Turning Clockwise  : "));
 #endif
-#endif  // GAPS_ENABLED
+#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
+		SerialBT.println(F("E|Turning Clockwise  : "));
+#endif
 
-		// ── Stage 2: Brake before spinning ───────────────────────────────────
 #if BRAKING_ENABLED == 1
 		shortBrake(BRAKE_DURATION_MILLIS);
 #endif
 
-#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
-		SerialBT.printf("E|Recovery: trying %s first\n", primaryIsCW ? "CW" : "CCW");
-#endif
-
-		// ── Stage 3: Primary direction spin (RECOVER_FIRST_DIR_MS) ───────────
-		// Uses error_dir to pick direction. If error_dir was stale (e.g. the
-		// bot was centered just before a 30° corner), this may be wrong — that
-		// is handled by Stage 4 (direction switch).
 		uint16_t sensorReadings = getSensorReadings();
 		unsigned long recoveryStart = millis();
 		while (isOutOfLine(sensorReadings) &&
-		       (millis() - recoveryStart < RECOVER_FIRST_DIR_MS))
+		       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
 		{
-			if (primaryIsCW)
-				turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-			else
-				turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+			turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
 			sensorReadings = getSensorReadings();
 		}
 
-		// ── Stage 4: Direction switch — handles wrong-direction corners ───────
-		// If the primary spin didn't find the line within RECOVER_FIRST_DIR_MS,
-		// the initial error_dir was likely wrong (e.g. 30° corner on HYPERDRIVE
-		// track). Automatically try the OPPOSITE direction for the remaining time.
-		if (isOutOfLine(sensorReadings))
-		{
-#if USB_SERIAL_LOGGING_ENABLED == 1
-			Serial.println(F("[RECOVERY] Primary direction failed — switching to opposite."));
+#if GAPS_ENABLED == 1
+		error_dir = 0;
 #endif
-			recoveryStart = millis();
-			const unsigned long remainingMs = RECOVER_TIMEOUT_MS - RECOVER_FIRST_DIR_MS;
-			while (isOutOfLine(sensorReadings) &&
-			       (millis() - recoveryStart < remainingMs))
-			{
-				if (primaryIsCW)
-					turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-				else
-					turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-				sensorReadings = getSensorReadings();
-			}
+	}
+	else if (error == (-1 * OUT_OF_LINE_ERROR_VALUE))
+	{
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.println(F("[RECOVERY] Out of line → Turning CCW"));
+#endif
+#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_SERIAL_BLUETOOTH == 1
+		Serial.println(F("E|Turning Counter Clockwise  : "));
+#endif
+#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
+		SerialBT.println(F("E|Turning Counter Clockwise  : "));
+#endif
+
+#if BRAKING_ENABLED == 1
+		shortBrake(BRAKE_DURATION_MILLIS);
+#endif
+
+		uint16_t sensorReadings = getSensorReadings();
+		unsigned long recoveryStart = millis();
+		while (isOutOfLine(sensorReadings) &&
+		       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
+		{
+			turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+			sensorReadings = getSensorReadings();
 		}
 
-		// Reset previousError so D = 0 on first PID loop after recovery.
-		// Without this, previousError = ±OUT_OF_LINE_ERROR_VALUE causes a
-		// huge D spike (D = new_error - 20 ≈ -18) that veers the bot hard.
-		previousError = 0;
-		error_dir     = 0;
+#if GAPS_ENABLED == 1
+		error_dir = 0;
+#endif
 	}
 	else
 	{
