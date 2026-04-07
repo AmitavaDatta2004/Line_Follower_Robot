@@ -14,6 +14,15 @@
 // At 600 RPM / 200 PWM (~1.6 m/s), 200ms is needed to shed momentum before spinning.
 #define BRAKE_DURATION_MILLIS    200
 
+// ── Intersection & Loop Trap Handling ─────────────────────────────────────────
+// At Y-junctions or crossovers where BOTH extreme left and right sensors trigger
+// simultaneously, the bot needs a strict rule to avoid indecision or "loop traps".
+// -1 = Always prefer Right (CW spin)
+//  1 = Always prefer Left (CCW spin)
+// For a standard loop that forks and merges, picking a consistent side guarantees 
+// the bot exits the loop instead of endlessly circling.
+#define INTERSECTION_TURN_BIAS   -1
+
 // ── Gap handling ──────────────────────────────────────────────────────────────
 // When sensors go dark, the bot first drives straight for GAP_TIMEOUT_MS before
 // deciding it's a real corner. If the line returns within this window → gap handled,

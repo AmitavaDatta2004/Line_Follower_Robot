@@ -153,17 +153,20 @@ void readSensors()
 	// ── Update direction memory ───────────────────────────────────────────────
 	// EXTREME EDGE PRIORITY:
 	// For acute angles (e.g. 60° zigzags), the new line hits the extreme outer sensors
-	// before the robot reaches the apex. We MUST prioritize these edge sensors to 
-	// set the correct turn direction because the PID average gets washed out (error ≈ 0)
-	// when both legs of the V are under the sensor bar near the apex.
+	// before the robot reaches the apex. We prioritize these edge sensors.
 	bool edgeLeft  = (s1 || s2);
 	bool edgeRight = (s11 || s12);
 	static unsigned long lastEdgeTime = 0;
 
-	if (edgeLeft && !edgeRight) {
+	if (edgeLeft && edgeRight) {
+		// Y-Junction or Crossroad: Both extreme edges triggered!
+		// To break loop traps, we MUST reliably pick one consistent path.
+		error_dir = INTERSECTION_TURN_BIAS; 
+		lastEdgeTime = millis();
+	} else if (edgeLeft) {
 		error_dir = 1;  // Priority: sharp CCW (Left)
 		lastEdgeTime = millis();
-	} else if (edgeRight && !edgeLeft) {
+	} else if (edgeRight) {
 		error_dir = -1; // Priority: sharp CW (Right)
 		lastEdgeTime = millis();
 	} else if (sensorData != 0 && error != 0) {
