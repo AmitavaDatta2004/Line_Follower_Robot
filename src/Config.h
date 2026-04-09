@@ -70,4 +70,9 @@
 
 #define SERIAL_BAUD_RATE 115200
 
+// ── OLED Screen ───────────────────────────────────────────────────────────────
+#define OLED_ENABLED 1
+#define OLED_SCL_PIN 22
+#define OLED_SDA_PIN 21
+
 #endif

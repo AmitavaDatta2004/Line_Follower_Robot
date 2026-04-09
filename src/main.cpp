@@ -8,6 +8,16 @@
 #include "Wire.h"
 #include "FastLED.h"
 
+#if OLED_ENABLED == 1
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+// The pins are defined in Config.h and passed to Wire.begin()
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+#endif
+
 // Include ArduinoJson only when bluetooth logging / tuning is enabled.
 #if BLUETOOTH_LOGGING_ENABLED == 1 || BLUETOOTH_TUNING_ENABLED == 1
 #include <ArduinoJson.h>
@@ -201,6 +211,15 @@ void readSensors()
 			indicateOff();
 			shortBrake(STOP_BRAKE_DURATION_MS);
 			stop();
+
+#if OLED_ENABLED == 1
+			display.clearDisplay();
+			display.setTextSize(2);
+			display.setTextColor(SSD1306_WHITE);
+			display.setCursor(20, 25);
+			display.println(F("FINISH!"));
+			display.display();
+#endif
 			delay(STOP_HALT_DURATION_MS);
 		}
 	}
@@ -455,6 +474,49 @@ void setup()
 #endif
 
 	FastLED.addLeds<WS2812, NEOPIXEL_LED_PIN, GRB>(leds, NUM_LEDS);
+
+#if OLED_ENABLED == 1
+	// Initialize I2C with the custom pins
+	Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
+	
+	// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+	if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.println(F("SSD1306 allocation failed"));
+#endif
+	} else {
+		display.clearDisplay();
+		display.setTextSize(2);
+		display.setTextColor(SSD1306_WHITE);
+		display.setCursor(20, 20);
+		display.println(F("HELIOS"));
+		display.setTextSize(1);
+		display.setCursor(35, 40);
+		display.println(F("v1.0 Ready"));
+		display.display();
+		
+		delay(1500); // Hold splash screen briefly
+		
+		// Show active configuration before the run starts
+		display.clearDisplay();
+		display.setTextSize(1);
+		display.setCursor(0, 5);
+		display.println(F("- CURRENT CONFIG -"));
+		
+		display.setCursor(0, 25);
+		display.printf("KP: %d  KI: %d  KD: %d\n", Kp, Ki, Kd);
+		
+		display.setCursor(0, 40);
+		display.printf("SPD: %d  TRK: %s\n", baseMotorSpeed, (trackType == WHITE_LINE_BLACK_TRACK) ? "Inv" : "Nrm");
+		
+#if USE_INBUILT_BLUETOOTH == 1 || USE_SERIAL_BLUETOOTH == 1
+		display.setCursor(0, 55);
+		display.print(F("Status: BT Active"));
+#endif
+		
+		display.display();
+	}
+#endif
 }
 
 // #########################################################################################################################
@@ -499,6 +561,19 @@ void loop()
 		sprintf(buff, "W|Kp : %d | Ki : %d | Kd : %d | ms : %d | de : %d",
 		        Kp, Ki, Kd, baseMotorSpeed, loopDelay);
 		Serial.println(buff);
+
+#if OLED_ENABLED == 1
+		display.clearDisplay();
+		display.setTextSize(1);
+		display.setTextColor(SSD1306_WHITE);
+		display.setCursor(0, 5);
+		display.println(F("- USB/BT UPDATE -"));
+		display.setCursor(0, 25);
+		display.printf("KP:%d KI:%d KD:%d", Kp, Ki, Kd);
+		display.setCursor(0, 40);
+		display.printf("SPD:%d DLY:%d", baseMotorSpeed, loopDelay);
+		display.display();
+#endif
 	}
 #endif
 
@@ -529,6 +604,19 @@ void loop()
 
 		SerialBT.printf("W|Kp : %d | Ki : %d | Kd : %d | ms : %d | de : %d\n",
 		                Kp, Ki, Kd, baseMotorSpeed, loopDelay);
+
+#if OLED_ENABLED == 1
+		display.clearDisplay();
+		display.setTextSize(1);
+		display.setTextColor(SSD1306_WHITE);
+		display.setCursor(0, 5);
+		display.println(F("- BLUETOOTH UPDATE -"));
+		display.setCursor(0, 25);
+		display.printf("KP:%d KI:%d KD:%d", Kp, Ki, Kd);
+		display.setCursor(0, 40);
+		display.printf("SPD:%d DLY:%d", baseMotorSpeed, loopDelay);
+		display.display();
+#endif
 	}
 #endif
 
