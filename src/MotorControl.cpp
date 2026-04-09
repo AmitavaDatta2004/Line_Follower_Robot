@@ -26,63 +26,62 @@ void initMotorPWM()
 // ─────────────────────────────────────────────────────────────────────────────
 static inline int applyLeftOffset(int speed, int base)
 {
-    return constrain(speed + leftMotorOffset, 0, base);
+    return constrain(speed + leftMotorOffset, -base, base);
 }
 static inline int applyRightOffset(int speed, int base)
 {
-    return constrain(speed + rightMotorOffset, 0, base);
+    return constrain(speed + rightMotorOffset, -base, base);
+}
+
+static inline void setMotorDirectionAndPWM(int channel, int speed, int pin1, int pin2) 
+{
+    if (speed >= 0) {
+        digitalWrite(pin1, HIGH);
+        digitalWrite(pin2, LOW);
+    } else {
+        digitalWrite(pin1, LOW);
+        digitalWrite(pin2, HIGH);
+    }
+    ledcWrite(channel, abs(speed));
 }
 
 void moveStraight(int leftMotorSpeed, int rightMotorSpeed, int baseMotorSpeed)
 {
-    // Left motor forward
-    digitalWrite(LEFT_MOTOR_PIN_1, HIGH);
-    digitalWrite(LEFT_MOTOR_PIN_2, LOW);
-
-    // Right motor forward
-    digitalWrite(RIGHT_MOTOR_PIN_1, HIGH);
-    digitalWrite(RIGHT_MOTOR_PIN_2, LOW);
-
-    ledcWrite(LEFT_MOTOR_PWM_CHANNEL,  applyLeftOffset(leftMotorSpeed,   baseMotorSpeed));
-    ledcWrite(RIGHT_MOTOR_PWM_CHANNEL, applyRightOffset(rightMotorSpeed, baseMotorSpeed));
+    int finalLeft = applyLeftOffset(leftMotorSpeed, baseMotorSpeed);
+    int finalRight = applyRightOffset(rightMotorSpeed, baseMotorSpeed);
+    
+    setMotorDirectionAndPWM(LEFT_MOTOR_PWM_CHANNEL, finalLeft, LEFT_MOTOR_PIN_1, LEFT_MOTOR_PIN_2);
+    setMotorDirectionAndPWM(RIGHT_MOTOR_PWM_CHANNEL, finalRight, RIGHT_MOTOR_PIN_1, RIGHT_MOTOR_PIN_2);
 }
 
 void turnCCW(int leftMotorSpeed, int rightMotorSpeed, int baseMotorSpeed)
 {
-    // Left motor backward
-    digitalWrite(LEFT_MOTOR_PIN_1, LOW);
-    digitalWrite(LEFT_MOTOR_PIN_2, HIGH);
-
-    // Right motor forward
-    digitalWrite(RIGHT_MOTOR_PIN_1, HIGH);
-    digitalWrite(RIGHT_MOTOR_PIN_2, LOW);
-
 #if (TURN_SPEED_REDUCTION_ENABLED == 1)
     leftMotorSpeed  = (leftMotorSpeed  * (100 - TURN_SPEED_REDUCTION_PERCENT)) / 100;
     rightMotorSpeed = (rightMotorSpeed * (100 - TURN_SPEED_REDUCTION_PERCENT)) / 100;
 #endif
 
-    ledcWrite(LEFT_MOTOR_PWM_CHANNEL,  applyLeftOffset(leftMotorSpeed,   baseMotorSpeed));
-    ledcWrite(RIGHT_MOTOR_PWM_CHANNEL, applyRightOffset(rightMotorSpeed, baseMotorSpeed));
+    int finalLeft = applyLeftOffset(leftMotorSpeed, baseMotorSpeed);
+    int finalRight = applyRightOffset(rightMotorSpeed, baseMotorSpeed);
+
+    // CCW: Left backward, Right forward
+    setMotorDirectionAndPWM(LEFT_MOTOR_PWM_CHANNEL, -abs(finalLeft), LEFT_MOTOR_PIN_1, LEFT_MOTOR_PIN_2);
+    setMotorDirectionAndPWM(RIGHT_MOTOR_PWM_CHANNEL, abs(finalRight), RIGHT_MOTOR_PIN_1, RIGHT_MOTOR_PIN_2);
 }
 
 void turnCW(int leftMotorSpeed, int rightMotorSpeed, int baseMotorSpeed)
 {
-    // Left motor forward
-    digitalWrite(LEFT_MOTOR_PIN_1, HIGH);
-    digitalWrite(LEFT_MOTOR_PIN_2, LOW);
-
-    // Right motor backward
-    digitalWrite(RIGHT_MOTOR_PIN_1, LOW);
-    digitalWrite(RIGHT_MOTOR_PIN_2, HIGH);
-
 #if (TURN_SPEED_REDUCTION_ENABLED == 1)
     leftMotorSpeed  = (leftMotorSpeed  * (100 - TURN_SPEED_REDUCTION_PERCENT)) / 100;
     rightMotorSpeed = (rightMotorSpeed * (100 - TURN_SPEED_REDUCTION_PERCENT)) / 100;
 #endif
 
-    ledcWrite(LEFT_MOTOR_PWM_CHANNEL,  applyLeftOffset(leftMotorSpeed,   baseMotorSpeed));
-    ledcWrite(RIGHT_MOTOR_PWM_CHANNEL, applyRightOffset(rightMotorSpeed, baseMotorSpeed));
+    int finalLeft = applyLeftOffset(leftMotorSpeed, baseMotorSpeed);
+    int finalRight = applyRightOffset(rightMotorSpeed, baseMotorSpeed);
+
+    // CW: Left forward, Right backward
+    setMotorDirectionAndPWM(LEFT_MOTOR_PWM_CHANNEL, abs(finalLeft), LEFT_MOTOR_PIN_1, LEFT_MOTOR_PIN_2);
+    setMotorDirectionAndPWM(RIGHT_MOTOR_PWM_CHANNEL, -abs(finalRight), RIGHT_MOTOR_PIN_1, RIGHT_MOTOR_PIN_2);
 }
 
 void shortBrake(int durationMillis)
