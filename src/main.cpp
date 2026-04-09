@@ -267,25 +267,16 @@ void readSensors()
  */
 void calculatePID()
 {
-	// Detect if we are in a recovery/gap state using the out-of-line placeholder.
-	// If so, we use the previousError for the P and D terms to prevent a physical
-	// jerk / derivative kick when the error "jumps" from a low value to 20.
-	int currentProcessError = error;
-	if (abs(error) == OUT_OF_LINE_ERROR_VALUE)
-	{
-		currentProcessError = previousError;
-	}
+	P = error;
 
-	P = currentProcessError;
-
-	if (currentProcessError == 0)
+	if (error == 0)
 		I = 0;
 	else
-		I = I + currentProcessError;
+		I = I + error;
 
 	I = constrain(I, -I_CLAMP, I_CLAMP);
 
-	D = currentProcessError - previousError;
+	D = error - previousError;
 
 	// Clamp the derivative contribution BEFORE adding to PID.
 	// Prevents "derivative kick": at an obtuse turn apex the error sign reverses
