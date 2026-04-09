@@ -12,7 +12,7 @@
 
 // Braking duration (ms) applied before each recovery spin (BRAKING_ENABLED = 1).
 // At 600 RPM / 200 PWM (~1.6 m/s), 200ms is needed to shed momentum before spinning.
-#define BRAKE_DURATION_MILLIS    200
+#define BRAKE_DURATION_MILLIS    80
 
 // ── Gap handling ──────────────────────────────────────────────────────────────
 // When sensors go dark, the bot first drives straight for GAP_TIMEOUT_MS before
@@ -20,13 +20,13 @@
 // no braking, no recovery spin. If still dark → Phase 2 (brake + CW/CCW spin).
 // At 200 PWM (~1.6 m/s): 150ms × 1.6 = ~24cm gap coverage.
 // Right-angle turns: bot drives ~8cm past corner at MIN speed before recovery starts.
-#define GAP_TIMEOUT_MS          150
+#define GAP_TIMEOUT_MS          100
 
 // Maximum |lastRealError| to qualify as a gap (vs. a corner).
 // Gap   → bot was going STRAIGHT → lastRealError ≈ 0  (≤ threshold) → Phase 1 runs.
 // Corner → error was BUILDING UP  → lastRealError large (> threshold) → skip to Phase 2.
 // Tune: higher = more turns treated as gaps (risky); lower = fewer gaps recognised.
-#define GAP_ERROR_THRESHOLD       3
+#define GAP_ERROR_THRESHOLD       6
 
 // ── Stop patch behaviour ───────────────────────────────────────────────────────
 // Time (ms) to drive forward to confirm the stop patch is real (not a false positive).
