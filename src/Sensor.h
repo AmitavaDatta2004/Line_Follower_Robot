@@ -54,5 +54,6 @@
 uint16_t getSensorReadings();
 int getCalculatedError(uint16_t sensorReading, int fallbackError);
 int isOutOfLine(uint16_t sensorReadings);
+int isOnCenter(uint16_t sensorReadings);
 
 #endif

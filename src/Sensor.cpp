@@ -178,3 +178,11 @@ int isOutOfLine(uint16_t sensorReadings)
     // curve / wide-line patterns and could exit recovery too early.
     return (sensorReadings == 0) ? 1 : 0;
 }
+
+int isOnCenter(uint16_t sensorReadings)
+{
+    // Returns 1 if any of the center 6 sensors (s4-s9) detect the line.
+    // This provides a much smoother handoff from recovery turns back to PID.
+    // Bits 10, 9, 8, 7, 6, 5 are s4, s5, s6, s7, s8, s9.
+    return (sensorReadings & 0b0000011111100000) ? 1 : 0;
+}

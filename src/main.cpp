@@ -65,6 +65,9 @@ int error_dir     = 0;
 int previousError = 0;
 int lastRealError  = 0;  // last error when sensors actively saw the line (≠ OUT_OF_LINE placeholder)
 int PID_value     = 0;
+uint8_t intersectionCount = 0;
+unsigned long lastIntersectionTime = 0;
+bool loopEscapeActive = false;
 
 // Make sure to update this variable according to the type of track the LFR is about to run on.
 // When the macro for enabling inversion is set to 1, this variable updates itself automatically.
@@ -171,9 +174,31 @@ void readSensors()
 
 	// ── Checkpoint / inversion indicators ────────────────────────────────────
 	if (MID_6_SENSORS_HIGH)
+	{
 		indicateOn();
+		
+		// ── Intersection Detection / Loop Logic ──────────────────────────────
+		unsigned long currentTime = millis();
+		if (currentTime - lastIntersectionTime > INTERSECTION_DEBOUNCE_MS)
+		{
+			intersectionCount++;
+			lastIntersectionTime = currentTime;
+#if USB_SERIAL_LOGGING_ENABLED == 1
+			Serial.printf("[LOOP] Junction #%d detected\n", intersectionCount);
+#endif
+			if (intersectionCount >= LOOP_ESCAPE_THRESHOLD)
+			{
+				loopEscapeActive = true;
+#if USB_SERIAL_LOGGING_ENABLED == 1
+				Serial.println(F("[LOOP] ESCAPE ACTIVATED!"));
+#endif
+			}
+		}
+	}
 	else
+	{
 		indicateOff();
+	}
 
 	if (trackType == WHITE_LINE_BLACK_TRACK)
 		indicateInversionOn();
@@ -300,6 +325,26 @@ void calculatePID()
  */
 void controlMotors()
 {
+	// ── Loop Escape Maneuver ──────────────────────────────────────────────────
+	// If the bot has hit the same intersection multiple times (suspected circular loop),
+	// force a straight drive for LOOP_ESCAPE_DURATION_MS to "jump" the junction.
+	if (loopEscapeActive)
+	{
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.println(F("[LOOP] Executing Escape Maneuver..."));
+#endif
+		moveStraight(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+		delay(LOOP_ESCAPE_DURATION_MS);
+		
+		// Reset state after the maneuver to resume normal operation.
+		loopEscapeActive = false;
+		intersectionCount = 0;
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.println(F("[LOOP] Escape Complete. Resuming PID."));
+#endif
+		return;
+	}
+
 	if (error == OUT_OF_LINE_ERROR_VALUE || error == (-1 * OUT_OF_LINE_ERROR_VALUE))
 	{
 		// ══════════════════════════════════════════════════════════════════════
@@ -368,7 +413,7 @@ void controlMotors()
 #endif
 			uint16_t      sensorReadings = getSensorReadings();
 			unsigned long recoveryStart  = millis();
-			while (isOutOfLine(sensorReadings) &&
+			while (!isOnCenter(sensorReadings) &&
 			       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
 			{
 				turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
@@ -385,13 +430,19 @@ void controlMotors()
 #endif
 			uint16_t      sensorReadings = getSensorReadings();
 			unsigned long recoveryStart  = millis();
-			while (isOutOfLine(sensorReadings) &&
+			while (!isOnCenter(sensorReadings) &&
 			       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
 			{
 				turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
 				sensorReadings = getSensorReadings();
 			}
 		}
+
+		// ── Post-Recovery Reset ──────────────────────────────────────────────
+		// Reset PID memory (I and D terms) so the bot doesn't "kick" violently
+		// when it re-acquires the line at an angle.
+		previousError = 0;
+		I = 0;
 	}
 	else
 	{

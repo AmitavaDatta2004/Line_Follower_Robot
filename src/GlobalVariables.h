@@ -26,6 +26,11 @@ extern int lastRealError;   // last error when sensors were ACTIVE (not out-of-l
 extern int PID_value;
 extern bool sensorInitialized;
 
+// ── Loop/Intersection logic ──
+extern uint8_t intersectionCount;
+extern unsigned long lastIntersectionTime;
+extern bool loopEscapeActive;
+
 // This variable is used for tracking line inversions
 // For black coloured tracks on white background this values is set to 1 and 0 for vice - versa
 extern uint8_t trackType;

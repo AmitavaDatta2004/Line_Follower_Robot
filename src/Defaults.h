@@ -6,13 +6,21 @@
 #define OUT_OF_LINE_ERROR_VALUE  20
 #define LOOP_ESCAPE_ERROR_VALUE   3
 
+// ── Loop / Intersection management ──
+// Minimum time (ms) between two recorded intersections. Prevents double-counting.
+#define INTERSECTION_DEBOUNCE_MS     600
+// How long (ms) the bot drives straight at full speed to "jump" a loop intersection.
+#define LOOP_ESCAPE_DURATION_MS      250
+// Number of intersections to trigger an escape (usually 2 for a single loop).
+#define LOOP_ESCAPE_THRESHOLD          2
+
 // Maximum time (ms) the bot will spin CW or CCW during recovery before giving up.
 // Triangle corners on HYPERDRIVE track require longer recovery window — 4 seconds.
 #define RECOVER_TIMEOUT_MS      4000
 
 // Braking duration (ms) applied before each recovery spin (BRAKING_ENABLED = 1).
-// At 600 RPM / 200 PWM (~1.6 m/s), 200ms is needed to shed momentum before spinning.
-#define BRAKE_DURATION_MILLIS    200
+// At 600 RPM / 200 PWM (~1.6 m/s), 80ms is enough to stabilize without stuttering.
+#define BRAKE_DURATION_MILLIS     80
 
 // ── Gap handling ──────────────────────────────────────────────────────────────
 // When sensors go dark, the bot first drives straight for GAP_TIMEOUT_MS before
