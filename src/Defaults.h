@@ -12,7 +12,7 @@
 
 // Braking duration (ms) applied before each recovery spin (BRAKING_ENABLED = 1).
 // At 600 RPM / 200 PWM (~1.6 m/s), 200ms is needed to shed momentum before spinning.
-#define BRAKE_DURATION_MILLIS    80
+#define BRAKE_DURATION_MILLIS    140
 
 // ── Gap handling ──────────────────────────────────────────────────────────────
 // When sensors go dark, the bot first drives straight for GAP_TIMEOUT_MS before
@@ -44,9 +44,9 @@
 //   Ki=0   — track is too dynamic; integral causes corner windup
 //   Kd=10  — capped by D_CLAMP; balanced for spiral & 60° corners
 #define DEFAULT_LOOP_DELAY   20
-#define DEFAULT_KP           25
+#define DEFAULT_KP           20
 #define DEFAULT_KI            0
-#define DEFAULT_KD           10
+#define DEFAULT_KD           25
 
 // Start at 200 (not 255) for first runs — scale up once bot is reliable.
 // At 600 RPM: PWM 200 ≈ 1.6 m/s. Dynamic scaling slows it further on turns.
@@ -60,7 +60,7 @@
 // Caps the MAXIMUM contribution the derivative term (Kd*D) can add to PID_value.
 // Tighter value (45) needed for HYPERDRIVE track — triangle 60° corners cause a
 // more violent D spike than obtuse turns (error: -11 → +11 in a single loop).
-#define D_CLAMP 45
+#define D_CLAMP 80
 
 // ── Motor calibration trim ────────────────────────────────────────────────────
 // Compensates for motor speed mismatch / mechanical drift.
@@ -105,6 +105,6 @@
 // Percentage by which base motor speed is reduced during CW / CCW recovery turns.
 // At 10% (old): recovery spin = 180 PWM at base 200 → too fast for 60° corners.
 // At 40% (new): recovery spin = 120 PWM → slow enough to detect line precisely.
-#define TURN_SPEED_REDUCTION_PERCENT  40
+#define TURN_SPEED_REDUCTION_PERCENT  50
 
 #endif
