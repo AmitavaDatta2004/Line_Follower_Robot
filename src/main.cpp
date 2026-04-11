@@ -164,12 +164,9 @@ void readSensors()
 	(void)s2; (void)s3; (void)s11;
 
 	// ── Update direction memory ───────────────────────────────────────────────
-	// Primary: use the full-width PID error — more informative than edge sensors.
-	//   error > 0  →  line is to the right  →  error_dir = -1  →  recover CW
-	//   error < 0  →  line is to the left   →  error_dir = +1  →  recover CCW
-	if (sensorData != 0 && error != 0)
-		error_dir = (error > 0) ? -1 : 1;
-	else if (s1 != s12)   // Secondary fallback: raw edge sensors
+	// Primary: use the outermost edge sensors for strict acute-angle memory.
+    // If the line hits an edge, memorize that edge for recovery.
+	if (s1 != s12)
 		error_dir = s1 - s12;
 
 	// ── Checkpoint / inversion indicators ────────────────────────────────────
@@ -443,6 +440,25 @@ void controlMotors()
 		// when it re-acquires the line at an angle.
 		previousError = 0;
 		I = 0;
+	}
+	else if (abs(error) >= PIVOT_ERROR_THRESHOLD)
+	{
+		// ── Immediate Pivot Handing ──────────────────────────────────────────
+		// The error is extremely large (line is only under the furthest sensors).
+		// This means an acute or sharp 90-degree angular turn is starting.
+		// Pivot immediately by throwing the inner wheel backwards, rather than 
+		// waiting for the line to be lost.
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.printf("[PIVOT] error=%d\n", error);
+#endif
+		if (error > 0)
+			turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+		else
+			turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+			
+		// Temporarily zero derivative memory to prevent a windup kick once the 
+		// pivot re-enters normal PID following.
+		previousError = error;
 	}
 	else
 	{

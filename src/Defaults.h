@@ -58,11 +58,18 @@
 
 // Start at 200 (not 255) for first runs — scale up once bot is reliable.
 // At 600 RPM: PWM 200 ≈ 1.6 m/s. Dynamic scaling slows it further on turns.
-#define DEFAULT_MOTOR_SPEED 200
+#define DEFAULT_MOTOR_SPEED 150
 
 // ── PID integral clamp ────────────────────────────────────────────────────────
 // Caps the accumulated integral term to prevent windup during long off-line events.
 #define I_CLAMP 200
+
+// ── Pivot Threshold for Angular Turns ─────────────────────────────────────────
+// If absolute error exceeds this threshold, the robot kicks into an immediate
+// sharp pivot (spinning the inner wheel backward) instead of a simple differential
+// turn. This guarantees perfect tracing of acute-angle / flame-shaped corners.
+// Max error is 11. 9 means the line has reached the last 2 edge sensors.
+#define PIVOT_ERROR_THRESHOLD  9
 
 // ── PID derivative clamp ──────────────────────────────────────────────────────
 // Caps the MAXIMUM contribution the derivative term (Kd*D) can add to PID_value.
