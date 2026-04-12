@@ -56,4 +56,11 @@ int getCalculatedError(uint16_t sensorReading, int fallbackError);
 int isOutOfLine(uint16_t sensorReadings);
 int isOnCenter(uint16_t sensorReadings);
 
+// Patterns check if the outermost 3-4 sensors on either side are high.
+// This identifies L-junctions/90°/Acute turns before the bot leaves the track.
+// Bits: [unused][unused][s1][s2][s3][s4][s5][s6][s7][s8][s9][s10][s11][s12][unused][unused]
+// Indices (shift): 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2
+#define is90DegreeLeft(r)   ((r & 0b0011100000000000) == 0b0011100000000000)
+#define is90DegreeRight(r)  ((r & 0b0000000000011100) == 0b0000000000011100)
+
 #endif

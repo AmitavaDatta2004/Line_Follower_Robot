@@ -35,8 +35,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 // ─────────────────────────────────────────────────────────────────────────────
 // MID_8_SENSORS_* macros removed — they were defined but never used.
 
-#define MID_6_SENSORS_HIGH (s4 == 1 && s5 == 1 && s6 == 1 && s7 == 1 && s8 == 1 && s9 == 1)
-#define MID_6_SENSORS_LOW  (s4 == 0 && s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0 && s9 == 0)
+#define MID_6_SENSORS_HIGH (s2==1 && s3==1 && s4 == 1 && s5 == 1 && s6 == 1 && s7 == 1 && s8 == 1 && s9 == 1 && s10 == 1 && s11 == 1)
+#define MID_6_SENSORS_LOW  (s2==0 && s3==0 && s4 == 0 && s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0 && s9 == 0 && s10 == 0 && s11 == 0)
 
 // #########################################################################################################################
 ///////////////////////////////////////////////     VARIABLE DEFINITIONS     ///////////////////////////////////////////////
@@ -52,6 +52,7 @@ int Ki = DEFAULT_KI;
 int Kd = DEFAULT_KD;
 int baseMotorSpeed = DEFAULT_MOTOR_SPEED;
 int loopDelay      = DEFAULT_LOOP_DELAY;
+uint16_t sensorData = 0;   // Global snapshot for controlMotors access
 int error          = 0;
 
 // Initialised from Defaults.h compile-time constants; can be tweaked at runtime.
@@ -68,6 +69,7 @@ int PID_value     = 0;
 uint8_t intersectionCount = 0;
 unsigned long lastIntersectionTime = 0;
 bool loopEscapeActive = false;
+unsigned long stopPatchFirstSeen = 0;  // ms timestamp of first loop where all-12 fired; 0 = not active
 
 // Make sure to update this variable according to the type of track the LFR is about to run on.
 // When the macro for enabling inversion is set to 1, this variable updates itself automatically.
@@ -143,7 +145,7 @@ void indicateOff()
  */
 void readSensors()
 {
-	uint16_t sensorData = getSensorReadings();
+	sensorData = getSensorReadings();
 	error = getCalculatedError(sensorData, 0);
 
 	// Extract individual sensor bits (s1 = leftmost, s12 = rightmost).
@@ -169,28 +171,57 @@ void readSensors()
 	if (s1 != s12)
 		error_dir = s1 - s12;
 
+	// ── Save last real error (MUST happen BEFORE junction check) ─────────────
+	// lastRealError is used just below to guard intersection counting.
+	// Updating it here ensures the guard uses the CURRENT reading, not the
+	// previous loop's value — critical for distinguishing acute-corner apexes
+	// (high lastRealError) from genuine straight-line intersections (≈0).
+	if (sensorData != 0)
+		lastRealError = error;
+
 	// ── Checkpoint / inversion indicators ────────────────────────────────────
 	if (MID_6_SENSORS_HIGH)
 	{
 		indicateOn();
-		
+
 		// ── Intersection Detection / Loop Logic ──────────────────────────────
-		unsigned long currentTime = millis();
-		if (currentTime - lastIntersectionTime > INTERSECTION_DEBOUNCE_MS)
+		// GUARD: Only count as a real intersection if the bot was travelling
+		// STRAIGHT when the six center sensors flooded (abs(lastRealError) small).
+		//
+		// At an acute-angle apex the line sweeps in from the edge — lastRealError
+		// is already large (the bot was in a tight turn). This guard stops the
+		// loop-escape from triggering and launching the bot forward through turns.
+		//
+		// 90°/straight intersections: lastRealError ≈ 0 → counter fires normally.
+		// Acute-corner apex:          lastRealError is large → counter SKIPPED.
+		if (abs(lastRealError) <= JUNCTION_STRAIGHT_THRESHOLD)
 		{
-			intersectionCount++;
-			lastIntersectionTime = currentTime;
-#if USB_SERIAL_LOGGING_ENABLED == 1
-			Serial.printf("[LOOP] Junction #%d detected\n", intersectionCount);
-#endif
-			if (intersectionCount >= LOOP_ESCAPE_THRESHOLD)
+			unsigned long currentTime = millis();
+			if (currentTime - lastIntersectionTime > INTERSECTION_DEBOUNCE_MS)
 			{
-				loopEscapeActive = true;
+				intersectionCount++;
+				lastIntersectionTime = currentTime;
 #if USB_SERIAL_LOGGING_ENABLED == 1
-				Serial.println(F("[LOOP] ESCAPE ACTIVATED!"));
+				Serial.printf("[LOOP] Junction #%d detected (err=%d)\n",
+				              intersectionCount, lastRealError);
 #endif
+				if (intersectionCount >= LOOP_ESCAPE_THRESHOLD)
+				{
+					loopEscapeActive = true;
+#if USB_SERIAL_LOGGING_ENABLED == 1
+					Serial.println(F("[LOOP] ESCAPE ACTIVATED!"));
+#endif
+				}
 			}
 		}
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		else
+		{
+			Serial.printf("[LOOP] MID_6 HIGH but lastRealError=%d >= threshold=%d "
+			              "→ acute corner apex, NOT counted\n",
+			              lastRealError, JUNCTION_STRAIGHT_THRESHOLD);
+		}
+#endif
 	}
 	else
 	{
@@ -201,12 +232,6 @@ void readSensors()
 		indicateInversionOn();
 	else
 		indicateInversionOff();
-
-	// ── Save last real error before it may be overwritten by OUT_OF_LINE value ─
-	// lastRealError holds the most recent error captured while sensors saw the line.
-	// Checked in controlMotors() to tell a gap (lastRealError≈0) from a corner.
-	if (sensorData != 0)
-		lastRealError = error;
 
 	// ── Out-of-line: set recovery error ──────────────────────────────────────
 	if (sensorData == 0b0000000000000000)
@@ -222,14 +247,32 @@ void readSensors()
 			                             : -1 * OUT_OF_LINE_ERROR_VALUE;
 	}
 	// ── Stop patch: all 12 active sensors ────────────────────────────────────
+	// A real stop patch is a wide bar (≥5 cm). A corner junction or T-crossbar
+	// also lights all 12 sensors, but only for the brief time (~50-150ms) it
+	// takes the bot to cross through it.
+	//
+	// STRATEGY: use a continuous DURATION timer.
+	// • Start the timer on the FIRST loop where all-12 fires.
+	// • Reset the timer any loop where all-12 is NOT present.
+	// • Only trigger FINISH when all-12 has been held for STOP_CONFIRMATION_MS
+	//   consecutively AND the bot was going straight (lastRealError small).
+	//
+	// At 200 PWM (~1.6 m/s):  500ms corresponds to ~80cm of travel.
+	// No corner junction is 80cm wide, but a real stop patch is always present
+	// for as long as the bot sits on it (indefinitely).
 	else if (sensorData == 0b0011111111111100)
 	{
-		// Drive forward briefly to confirm it's a real stop patch, not a glitch.
-		moveStraight(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-		delay(STOP_CHECK_DELAY);
-		uint16_t sensorDataAgain = getSensorReadings();
-		if (sensorDataAgain == 0b0011111111111100)
+		// stopPatchFirstSeen is a file-scope variable so it can be reset from the else branch below.
+
+		if (stopPatchFirstSeen == 0)
+			stopPatchFirstSeen = millis();   // mark the first loop we see all-12
+
+		unsigned long heldFor = millis() - stopPatchFirstSeen;
+
+		if (abs(lastRealError) <= JUNCTION_STRAIGHT_THRESHOLD &&
+		    heldFor >= STOP_CONFIRMATION_MS)
 		{
+			// Confirmed: all-12 held continuously for long enough — real stop patch.
 			indicateOff();
 			shortBrake(STOP_BRAKE_DURATION_MS);
 			stop();
@@ -242,8 +285,23 @@ void readSensors()
 			display.println(F("FINISH!"));
 			display.display();
 #endif
+			stopPatchFirstSeen = 0;   // reset for next run
 			delay(STOP_HALT_DURATION_MS);
 		}
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		else
+		{
+			Serial.printf("[STOP] All-12 held %lums / %ums (err=%d) -> not confirmed yet\n",
+			              heldFor, STOP_CONFIRMATION_MS, lastRealError);
+		}
+#endif
+	}
+	else
+	{
+		// All-12 pattern is NOT active this loop → reset the timer.
+		// This ensures that crossing a corner junction (which briefly lights all-12)
+		// resets the clock so the bot doesn't accumulate time across separate junctions.
+		stopPatchFirstSeen = 0;
 	}
 
 	// ── USB Serial logging ────────────────────────────────────────────────────
@@ -400,65 +458,100 @@ void controlMotors()
 		shortBrake(BRAKE_DURATION_MILLIS);
 #endif
 
-		if (error == OUT_OF_LINE_ERROR_VALUE)
-		{
+		// ── Two-Phase Recovery Spin ───────────────────────────────────────────
+		// Phase A: Spin toward the last-memorised line side (error_dir).
+		// Phase B: If Phase A times out without finding the line, flip direction.
+		//          This prevents the bot from stopping dead when direction memory
+		//          is stale (e.g. acute-angle overshoot flipped the line side).
+		//
+		// EXIT CONDITION: isOnCenter() — line detected in any of the center 6
+		//   sensors (s4-s9). Stricter than isOutOfLine() to prevent premature exit.
+		bool spinCW = (error == OUT_OF_LINE_ERROR_VALUE);
+
+		// ── Phase A ──
 #if USB_SERIAL_LOGGING_ENABLED == 1
-			Serial.println(F("[RECOVERY] Turning CW"));
+		Serial.printf("[RECOVERY] Phase A — spinning %s\n", spinCW ? "CW" : "CCW");
 #endif
-#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
-			SerialBT.println(F("E|Turning Clockwise"));
-#endif
+		{
 			uint16_t      sensorReadings = getSensorReadings();
 			unsigned long recoveryStart  = millis();
 			while (!isOnCenter(sensorReadings) &&
 			       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
 			{
-				turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+				if (spinCW) turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+				else        turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
 				sensorReadings = getSensorReadings();
 			}
-		}
-		else
-		{
-#if USB_SERIAL_LOGGING_ENABLED == 1
-			Serial.println(F("[RECOVERY] Turning CCW"));
-#endif
-#if BLUETOOTH_LOGGING_ENABLED == 1 && USE_INBUILT_BLUETOOTH == 1
-			SerialBT.println(F("E|Turning Counter Clockwise"));
-#endif
-			uint16_t      sensorReadings = getSensorReadings();
-			unsigned long recoveryStart  = millis();
-			while (!isOnCenter(sensorReadings) &&
-			       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
+
+			if (!isOnCenter(sensorReadings))
 			{
-				turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-				sensorReadings = getSensorReadings();
+				// ── Phase B: direction was wrong — try the opposite side ──
+#if USB_SERIAL_LOGGING_ENABLED == 1
+				Serial.printf("[RECOVERY] Phase A timed out → Phase B: spinning %s\n",
+				              spinCW ? "CCW" : "CW");
+#endif
+				recoveryStart = millis();
+				while (!isOnCenter(sensorReadings) &&
+				       (millis() - recoveryStart < RECOVER_TIMEOUT_MS))
+				{
+					if (spinCW) turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+					else        turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+					sensorReadings = getSensorReadings();
+				}
 			}
 		}
 
 		// ── Post-Recovery Reset ──────────────────────────────────────────────
-		// Reset PID memory (I and D terms) so the bot doesn't "kick" violently
-		// when it re-acquires the line at an angle.
+		// Reset PID memory so the bot doesn't kick violently on re-acquisition.
 		previousError = 0;
 		I = 0;
+		// Set lastRealError to a large sentinel value so the gap-test (Phase 1)
+		// does NOT fire if sensors go dark again immediately after recovery.
+		lastRealError = PIVOT_ERROR_THRESHOLD;
 	}
-	else if (abs(error) >= PIVOT_ERROR_THRESHOLD)
+	else if (abs(error) >= PIVOT_ERROR_THRESHOLD || is90DegreeLeft(sensorData) || is90DegreeRight(sensorData))
 	{
-		// ── Immediate Pivot Handing ──────────────────────────────────────────
-		// The error is extremely large (line is only under the furthest sensors).
-		// This means an acute or sharp 90-degree angular turn is starting.
-		// Pivot immediately by throwing the inner wheel backwards, rather than 
-		// waiting for the line to be lost.
-#if USB_SERIAL_LOGGING_ENABLED == 1
-		Serial.printf("[PIVOT] error=%d\n", error);
+		// ── Blocking Pivot for Acute / 90° Angular Turns ──────────────────────
+		// TRIGGER: 
+		//  • Line is under extreme edge sensors (|error| large) OR
+		//  • Thick sensor patterns found (is90DegreeLeft/Right)
+		//
+		// This captures 90° corners early (before the bot leaves the track)
+		// and forces a reliable blocking pivot.
+		
+#if BRAKING_ENABLED == 1
+		shortBrake(PIVOT_BRAKE_MS);  // Shed momentum before spinning
 #endif
-		if (error > 0)
-			turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
-		else
-			turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.printf("[PIVOT] entry error=%d pattern=%s — blocking pivot start\n", 
+		              error, is90DegreeLeft(sensorData) ? "LEFT" : (is90DegreeRight(sensorData) ? "RIGHT" : "EDGE"));
+#endif
+		unsigned long pivotStart = millis();
+		
+		// Decide direction based on where the line was seen last.
+		bool pivotCW = (error > 0 || is90DegreeRight(sensorData));
+
+		while (millis() - pivotStart < PIVOT_TIMEOUT_MS)
+		{
+			if (pivotCW) turnCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
+			else         turnCCW(baseMotorSpeed, baseMotorSpeed, baseMotorSpeed);
 			
-		// Temporarily zero derivative memory to prevent a windup kick once the 
-		// pivot re-enters normal PID following.
-		previousError = error;
+			uint16_t pivotSensor = getSensorReadings();
+			// EXIT CONDITION: Line is back in the center AND detectable.
+			if (isOnCenter(pivotSensor))
+				break;
+		}
+
+		// Reset PID memory after the blocking pivot to prevent derivative kick.
+		previousError = 0;
+		I = 0;
+		// Set stability sentinel.
+		lastRealError = PIVOT_ERROR_THRESHOLD;
+
+#if USB_SERIAL_LOGGING_ENABLED == 1
+		Serial.println(F("[PIVOT] complete — resuming PID"));
+#endif
 	}
 	else
 	{
