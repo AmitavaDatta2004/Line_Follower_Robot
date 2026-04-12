@@ -60,7 +60,7 @@
 #define TURN_SPEED_REDUCTION_ENABLED 1
 
 #define BRAKING_ENABLED 1    // Essential for 60° triangle/arrow corners — sheds momentum before recovery spin
-#define GAPS_ENABLED 1
+#define GAPS_ENABLED 0
 #define INVERSION_ENABLED 1
 
 // Automatically reduce motor speed proportional to turn sharpness (error magnitude).

@@ -53,7 +53,7 @@
 // At 200 PWM (~1.6 m/s): 500ms = ~80cm of travel — no corner junction is that wide.
 // A real stop patch holds all-12 indefinitely (confirmed well within 500ms).
 // Reduce to 300ms for narrow stop patches. Raise to 700ms if corners still trigger.
-#define STOP_CONFIRMATION_MS    500
+#define STOP_CONFIRMATION_MS    600
 
 // Active brake duration (ms) applied once a stop patch is confirmed.
 #define STOP_BRAKE_DURATION_MS  1000
