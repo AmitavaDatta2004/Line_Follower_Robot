@@ -67,13 +67,13 @@
 //   Ki=0   — track is too dynamic; integral causes corner windup
 //   Kd=10  — capped by D_CLAMP; balanced for spiral & 60° corners
 #define DEFAULT_LOOP_DELAY   10
-#define DEFAULT_KP           25
+#define DEFAULT_KP           20
 #define DEFAULT_KI            0
 #define DEFAULT_KD           10
 
 // Start at 200 (not 255) for first runs — scale up once bot is reliable.
 // At 600 RPM: PWM 200 ≈ 1.6 m/s. Dynamic scaling slows it further on turns.
-#define DEFAULT_MOTOR_SPEED 170
+#define DEFAULT_MOTOR_SPEED 200
 
 // ── PID integral clamp ────────────────────────────────────────────────────────
 // Caps the accumulated integral term to prevent windup during long off-line events.
@@ -84,7 +84,7 @@
 // sharp pivot (spinning the inner wheel backward) instead of a simple differential
 // turn. This guarantees perfect tracing of acute-angle / flame-shaped corners.
 // Max error is 11. 9 means the line has reached the last 2 edge sensors.
-#define PIVOT_ERROR_THRESHOLD  8
+#define PIVOT_ERROR_THRESHOLD  9
 
 // Safety timeout for the blocking pivot loop (ms).
 // The pivot spins until the line re-enters the safe zone (error < PIVOT_ERROR_THRESHOLD)
@@ -145,6 +145,6 @@
 // Percentage by which base motor speed is reduced during CW / CCW recovery turns.
 // At 10% (old): recovery spin = 180 PWM at base 200 → too fast for 60° corners.
 // At 40% (new): recovery spin = 120 PWM → slow enough to detect line precisely.
-#define TURN_SPEED_REDUCTION_PERCENT  10
+#define TURN_SPEED_REDUCTION_PERCENT  20
 
 #endif

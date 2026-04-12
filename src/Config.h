@@ -12,7 +12,7 @@
 
 // ── Bluetooth credentials ─────────────────────────────────────────────────────
 #define BT_PIN   "9637"
-#define BT_NAME  "HELIOS v1.0"
+#define BT_NAME  "DURGA"
 
 // ── ESP32 LEDC hardware PWM ───────────────────────────────────────────────────
 // Using LEDC instead of analogWrite() gives configurable frequency and is the
@@ -60,13 +60,13 @@
 #define TURN_SPEED_REDUCTION_ENABLED 1
 
 #define BRAKING_ENABLED 1    // Essential for 60° triangle/arrow corners — sheds momentum before recovery spin
-#define GAPS_ENABLED 0
+#define GAPS_ENABLED 1
 #define INVERSION_ENABLED 1
 
 // Automatically reduce motor speed proportional to turn sharpness (error magnitude).
 // effectiveSpeed = baseMotorSpeed - (abs(error) * SPEED_SCALE_FACTOR)
 // Tune SPEED_SCALE_FACTOR and MIN_MOTOR_SPEED in Defaults.h.
-#define DYNAMIC_SPEED_ENABLED 0
+#define DYNAMIC_SPEED_ENABLED 1
 
 #define SERIAL_BAUD_RATE 115200
 

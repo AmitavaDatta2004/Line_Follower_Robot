@@ -35,8 +35,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 // ─────────────────────────────────────────────────────────────────────────────
 // MID_8_SENSORS_* macros removed — they were defined but never used.
 
-#define MID_6_SENSORS_HIGH (s2==1 && s3==1 && s4 == 1 && s5 == 1 && s6 == 1 && s7 == 1 && s8 == 1 && s9 == 1 && s10 == 1 && s11 == 1)
-#define MID_6_SENSORS_LOW  (s2==0 && s3==0 && s4 == 0 && s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0 && s9 == 0 && s10 == 0 && s11 == 0)
+#define MID_6_SENSORS_HIGH (s1==1 && s2==1 && s3==1 && s4 == 1 && s5 == 1 && s6 == 1 && s7 == 1 && s8 == 1 && s9 == 1 && s10 == 1 && s11 == 1 && s12 == 1)
+#define MID_6_SENSORS_LOW  (s1==0 && s2==0 && s3==0 && s4 == 0 && s5 == 0 && s6 == 0 && s7 == 0 && s8 == 0 && s9 == 0 && s10 == 0 && s11 == 0 && s12 == 0)
 
 // #########################################################################################################################
 ///////////////////////////////////////////////     VARIABLE DEFINITIONS     ///////////////////////////////////////////////
@@ -649,7 +649,7 @@ void setup()
 		display.setTextSize(2);
 		display.setTextColor(SSD1306_WHITE);
 		display.setCursor(20, 20);
-		display.println(F("HELIOS"));
+		display.println(F("DURGA"));
 		display.setTextSize(1);
 		display.setCursor(35, 40);
 		display.println(F("v1.0 Ready"));
